@@ -18,4 +18,6 @@ normFactor = (1/xBinSize) * (1/yBinSize)
 
 interpolFluxes = BLISS.BLISS(points, fluxes, knots, nearIndices)
 
-
+plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
+plt.colorbar()
+plt.show()
