@@ -16,26 +16,32 @@ def extractData(file):
     points = zip(xcenters, ycenters)
     return list(points), fluxes
 
-
-# Procedure: nearest
-# Parameters: point — coordinates of a point (list (x,y))
-#             point_list — a list of coordinates
-#             neighbors — How many neighbors to look for.
-# Returns: the indices of the nearest neighbors in point_list to point.
-
 def nearest(point, neighbors, tree):
+    """
+    Args:
+    point (list): list of x, y coordinates of a single center.
+    neighbors (int): how many neighbors to look for.
+    tree: precomputed spacial.KDtree() of a grid of knots.
+    
+    Returns: 
+    array: indices of the nearest neighbors.
+    """
     neighbors = tree.query(point, k=neighbors)
     return neighbors[1]
 
 
-# Procedure: removeOutliers
-# Parameters: point_list — a list of lists of coordinates ((x, y))
-#             flux_list — a list of fluxes corresponding to every point to point_list
-#             x_sigma_cutoff — number of accepted standard deviations in X (default= 3)
-#             y_sigma_cutoff — number of accepted standard deviations in Y (default= 3)
-# Returns: list of all points below [cutoff] standard deviations and with 13 < x, y < 17
-
 def removeOutliers(point_list, flux_list, x_sigma_cutoff=3, y_sigma_cutoff=3):
+    """
+        Args:
+        point_list (list): list of lists with (x,y) coordinates of centers.
+        flux_list (list): list of fluxes associated with the centers.
+        x_sigma_cutoff (float): how many standard deviatins to accept in x.
+        y_sigma_cutoff (float): how many standard deviatins to accept in y.
+
+        Returns:
+        points, fluxes: list of points without outliers, list of corresponding fluxes.
+
+        """
     avg, sigma = mean(point_list, axis=0), std(point_list, axis=0)
     xmax = (avg[0] + x_sigma_cutoff * sigma[0])
     ymax = (avg[1] + y_sigma_cutoff * sigma[1])
@@ -59,7 +65,7 @@ def createGrid(point_list, xBinSize, yBinSize):
     :param point_list:  array of lists with (x,y) coordinates of each center.
     :param xBinSize: x length of each rectangle in the knot grid.
     :param yBinSize: y length of each rectangle in the knot grid.
-    :return:
+    :return: array of lists with (x,y) coordinates of each vertex in knot grid.
     """
     unzip_point_list = list((zip(*point_list)))
     xmin, xmax = min(unzip_point_list[0]), max(unzip_point_list[0])
