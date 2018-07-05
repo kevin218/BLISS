@@ -2,9 +2,6 @@ from scipy import spatial
 from sklearn.externals import joblib
 from pylab import *;
 
-ion()
-from time import time
-
 y, x = 0, 1
 
 
