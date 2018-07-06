@@ -38,11 +38,11 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     """
     times, xcenter, ycenters, fluxes, flux_errs = BLISS.extractData(dataDir)
     
-    keep_inds = removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
+    keep_inds = bliss.removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
     
-    knots = createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
-    knotTree = spatial.KDTree(knots)
-    nearIndices = nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
+    knots = bliss.createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
+    knotTree = spatial.cKDTree(knots)
+    nearIndices = bliss.nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
     return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
