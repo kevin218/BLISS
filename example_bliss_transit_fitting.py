@@ -36,7 +36,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
         keep_inds (list): list of indicies to keep within the thresholds set
     
     """
-    times, xcenter, ycenters, fluxes, flux_errs = BLISS.extractData(dataDir)
+    times, xcenter, ycenters, fluxes, flux_errs = bliss.extractData(dataDir)
     
     keep_inds = bliss.removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
     
@@ -103,7 +103,7 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     model         = transit_model*line_model
     
     # multiply non-systematics model by systematics model (i.e. BLISS)
-    model        *= BLISS.BLISS(xcenters, ycenters fluxes/model, knots, nearIndices)
+    model        *= bliss.BLISS(xcenters, ycenters fluxes/model, knots, nearIndices)
     
     return (model - fluxes) / flux_errs
 
