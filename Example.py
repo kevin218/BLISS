@@ -4,7 +4,7 @@ from scipy import spatial
 
 from os import environ
 
-def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRange=3, ySigmaRange=3):
+def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRange=4, ySigmaRange=4):
     """This function takes in the filename of the data (stored with sklearn-joblib),
         checks the data for outliers, establishes the interpolation grid, 
         computes the nearest neighbours between all data points and that grid, 
@@ -34,18 +34,22 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
     
     """
-    points, fluxes = extractData(dataDir)
-    points, fluxes = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
+    times, xcenter, ycenters, fluxes, flux_errs = extractData(dataDir)
+    
+    points = np.array(list(zip(xcenter, ycenters)))
+    
+    (xcenters, ycenters), fluxes = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
+    
     knots = createGrid(points, xBinSize, yBinSize)
     knotTree = spatial.KDTree(knots)
     nearIndices = nearestIndices(points, knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
-    return points, fluxes, knots, nearIndices
+    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
-points, fluxes, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
+times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
 
 interpolFluxes = BLISS(points, fluxes, knots, nearIndices, 
                        xBinSize=xBinSize, yBinSize = yBinSize, 
