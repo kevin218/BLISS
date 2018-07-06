@@ -154,7 +154,6 @@ def BLISS(points, fluxes, knots, nearIndices, xBinSize=0.01, yBinSize=0.01, norm
 
         """
     meanKnotFluxes = associateFluxes(knots, nearIndices, points, fluxes)
-    interpolFluxes = interpolateFlux(knots=knots, knotFluxes=meanKnotFluxes, points=points,
+    return interpolateFlux(knots=knots, knotFluxes=meanKnotFluxes, points=points,
                                      nearIndices=nearIndices, xBinSize=xBinSize, yBinSize=yBinSize,
                                      normFactor=normFactor)
-    return interpolFluxes
