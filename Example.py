@@ -1,4 +1,4 @@
-import BLISS as BLISS
+import BLISS
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
@@ -34,13 +34,13 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
     
     """
-    points, fluxes = extractData(dataDir)
+    points, fluxes = BLISS.extractData(dataDir)
     
-    points, fluxes = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
+    points, fluxes = BLISS.removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     
-    knots = createGrid(points, xBinSize, yBinSize)
-    knotTree = spatial.KDTree(knots)
-    nearIndices = nearestIndices(points, knotTree)
+    knots = BLISS.createGrid(points, xBinSize, yBinSize)
+    knotTree = spatial.cKDTree(knots)
+    nearIndices = BLISS.nearestIndices(points, knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
     return points, fluxes, knots, nearIndices
@@ -49,7 +49,7 @@ dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.job
 
 points, fluxes, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
 
-interpolFluxes = BLISS(points, fluxes, knots, nearIndices, 
+interpolFluxes = BLISS.BLISS(points, fluxes, knots, nearIndices, 
                        xBinSize=xBinSize, yBinSize = yBinSize, 
                        normFactor=normFactor)
 
