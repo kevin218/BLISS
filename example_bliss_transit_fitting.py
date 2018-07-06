@@ -58,6 +58,39 @@ interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_ind
                        normFactor= normFactor)
 y,x = 0,1
 
+def batman_wrapper_lmfit(times, period, tCenter, inc, aprs, rprs, edepth, ecc, omega, u1, u2, 
+                         ldtype='quadratic', transitType='primary'):
+    
+
+  
+def transit_model(model_params, times):
+    # Transit Parameters
+    u1      = model_params['u1'].value
+    u2      = model_params['u2'].value
+    
+    if edepth > 0:
+      delta_phase = deltaphase_eclipse(ecc, omega) if ecc is not 0.0 else 0.5
+      t_secondary = tCenter + period*delta_phase
+    
+    rprs  = np.sqrt(model_params['tdepth'].value)
+    
+    bm_params           = batman.TransitParams() # object to store transit parameters
+    
+    bm_params.per       = model_params['period'].value   # orbital period
+    bm_params.t0        = model_params['tCenter'].value  # time of inferior conjunction
+    bm_params.inc       = model_params['inc'].value      # inclunaition in degrees
+    bm_params.a         = model_params['aprs'].value     # semi-major axis (in units of stellar radii)
+    bm_params.rp        = rprs     # planet radius (in units of stellar radii)
+    bm_params.fp        = model_params['edepth'].value   # planet radius (in units of stellar radii)
+    bm_params.ecc       = model_params['ecc'].value      # eccentricity
+    bm_params.w         = model_params['omega'].value    # longitude of periastron (in degrees)
+    bm_params.limb_dark = ldtype   # limb darkening model # NEED TO FIX THIS
+    bm_params.u         = [u1, u2] # limb darkening coefficients # NEED TO FIX THIS
+    
+    m_eclipse = batman.TransitModel(bm_params, times, transittype=transitType)# initializes model
+    
+    return m_eclipse.light_curve(bm_params)
+
 def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
