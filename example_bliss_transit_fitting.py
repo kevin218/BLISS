@@ -1,11 +1,11 @@
-import BLISS as BLISS
+import BLISS
 import matplotlib.pyplot as plt
-
-from lmfit import Minimizer, Parameters
-from os import environ
 from scipy import spatial 
 
-def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRange=4, ySigmaRange=4):
+from os import environ
+
+def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, 
+                                 xSigmaRange=4, ySigmaRange=4, fSigmaRange=4):
     """This function takes in the filename of the data (stored with sklearn-joblib),
         checks the data for outliers, establishes the interpolation grid, 
         computes the nearest neighbours between all data points and that grid, 
@@ -19,7 +19,6 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
     
     Written by C.Munoz 07-05-18
     Edited by J.Fraine 07-06-18
-
     Args:
         dataDir (str): the directory location for the joblib file containing the x,y,flux information
         
@@ -27,33 +26,36 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         yBinSize (float): distance in y-dimension to space interpolation grid
         xSigmaRange (float): relative distance in gaussian sigma space to reject x-outliers
         ySigmaRange (float): relative distance in gaussian sigma space to reject y-outliers
-
     Returns:
-        points (nDarray): X and Y positions for centering analysis
+        xcenters (nDarray): X positions for centering analysis
+        ycenters (nDarray): Y positions for centering analysis
         fluxes (nDarray): normalized photon counts from raw data
+        flux_err (nDarray): normalized photon uncertainties
         knots (nDarray): locations and initial flux values (weights) for interpolation grid
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
+        keep_inds (list): list of indicies to keep within the thresholds set
     
     """
-    times, xcenters, ycenters, fluxes, flux_errs = BLISS.extractData(dataDir)
+    times, xcenter, ycenters, fluxes, flux_errs = BLISS.extractData(dataDir)
     
-    (xcenters, ycenters), fluxes = BLISS.removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange)
+    keep_inds = removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
     
-    knots = BLISS.createGrid(xcenters, ycenters, xBinSize, yBinSize)
-    knotTree = spatial.cKDTree(knots)
-    nearIndices = BLISS.nearestIndices(xcenters, ycenters, knotTree)
+    knots = createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
+    knotTree = spatial.KDTree(knots)
+    nearIndices = nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
-    return times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices
+    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
-times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
+times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
-interpolFluxes = BLISS.BLISS(xcenters, ycenters, fluxes, knots, nearIndices, 
-                       xBinSize=xBinSize, yBinSize = yBinSize, 
-                       normFactor=normFactor)
-
+interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
+                       knots, nearIndices, 
+                       xBinSize  = xBinSize, 
+                       yBinSize  = yBinSize, 
+                       normFactor= normFactor)
 y,x = 0,1
 
 def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices):
