@@ -9,8 +9,14 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         checks the data for outliers, establishes the interpolation grid, 
         computes the nearest neighbours between all data points and that grid, 
         and outputs the necessary values for using BLISS
-
-    Created by C.Munoz 07-05-18
+        
+        The `flux` is assumed to be pure stellar signal -- i.e. no planet. 
+        BLISS is expected to be used inside a fitting routine where the transit has been `divided out`.
+        This example here assumes that there is no transit or eclipse in the light curve data (i.e. `flux` == 'stellar flux').
+        To use this with a light curve that contains a transit or eclipse, send the "residuals" to BLISS:
+            - i.e. `flux = system_flux / transit_model`
+    
+    Written by C.Munoz 07-05-18
     Edited by J.Fraine 07-06-18
 
     Args:
