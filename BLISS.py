@@ -29,35 +29,28 @@ def nearest(point, neighbors, tree):
     return neighbors[1]
 
 
-def removeOutliers(point_list, flux_list, x_sigma_cutoff=3, y_sigma_cutoff=3):
+def removeOutliers(xcenters, ycenters, fluxes=None, x_sigma_cutoff=4, y_sigma_cutoff=4, f_sigma_cutoff=4):
     """
         Args:
-        point_list (list): list of lists with (x,y) coordinates of centers.
-        flux_list (list): list of fluxes associated with the centers.
+        xcenters (nDarray): array of x-coordinates of centers.
+        ycenters (nDarray): array of y-coordinates of centers.
+        fluxes (list or None): None or array of fluxes associated with the centers.
+                                if fluxes is None, then skip 3rd dimension
         x_sigma_cutoff (float): how many standard deviatins to accept in x.
         y_sigma_cutoff (float): how many standard deviatins to accept in y.
-
+        f_sigma_cutoff (float): how many standard deviatins to accept in y.
+        
         Returns:
-        points, fluxes: list of points without outliers, list of corresponding fluxes.
+        boolean list: list of indices to keep as inliers
 
         """
-    avg, sigma = mean(point_list, axis=0), std(point_list, axis=0)
-    xmax = (avg[0] + x_sigma_cutoff * sigma[0])
-    ymax = (avg[1] + y_sigma_cutoff * sigma[1])
-    xmin = (avg[0] - x_sigma_cutoff * sigma[0])
-    ymin = (avg[1] - y_sigma_cutoff * sigma[1])
-    points = []
-    fluxes = []
-    i = 0
-    for point in point_list:
-        if point[0] < xmax and point[1] < ymax and point[0] > xmin and point[1] > ymin and point[0] < 17 \
-                and point[1] < 17 and point[0] > 13 and point[1] > 13:
-            points.append(point)
-            fluxes.append(flux_list[i])
-        i += 1
-    return points, fluxes
-
-
+    
+    x_ell = ((xcenters - xcenters.mean())/x_sigma_cutoff)**2. # x-ellipse term
+    y_ell = ((ycenters - ycenters.mean())/y_sigma_cutoff)**2. # y-ellipse term
+    
+    if fluxes is not None: f_ell = ((fluxes   - fluxes.mean()  )/f_sigma_cutoff)**2. # flux-ellipse term
+    
+    return y_ell + x_ell + f_ell < 1 if fluxes is not None else y_ell + x_ell < 1
 
 def createGrid(point_list, xBinSize, yBinSize):
     """
