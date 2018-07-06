@@ -1,4 +1,4 @@
-import BLISS
+import BLISS as bliss
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
