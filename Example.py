@@ -40,10 +40,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
     return points, fluxes, knots, nearIndices
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
-# xBinSize = 0.01
-# yBinSize = 0.01
-# xSigmaRange = 3
-# ySigmaRange = 3
+
 points, fluxes, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
 
 interpolFluxes = BLISS(points, fluxes, knots, nearIndices, 
