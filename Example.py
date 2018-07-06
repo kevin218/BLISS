@@ -4,8 +4,6 @@ from scipy import spatial
 
 from os import environ
 
-y,x = 0,1
-
 def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRange=3, ySigmaRange=3):
     """This function takes in the filename of the data (stored with sklearn-joblib),
         checks the data for outliers, establishes the interpolation grid, 
@@ -47,6 +45,11 @@ interpolFluxes = BLISS(points, fluxes, knots, nearIndices,
                        xBinSize=xBinSize, yBinSize = yBinSize, 
                        normFactor=normFactor)
 
-plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
+if not isinstance(points, np.ndarray): points = np.array(points)
+
+y,x = 0,1
+
+# plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
+plt.scatter(points.T[x], points.T[y], s=0.1, c=interpolFluxes)
 plt.colorbar()
 plt.show()
