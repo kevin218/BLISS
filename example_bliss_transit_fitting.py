@@ -1,8 +1,12 @@
+import argparse
 import BLISS as bliss
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
 from os import environ
+
+y,x = 0,1
+ppm = 1e6
 
 def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, 
                                  xSigmaRange=4, ySigmaRange=4, fSigmaRange=4):
@@ -43,7 +47,6 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     knots = bliss.createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
     knotTree = spatial.cKDTree(knots)
     nearIndices = bliss.nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
-    normFactor = (1/xBinSize) * (1/yBinSize)
     
     return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
 
@@ -76,7 +79,7 @@ def transit_model(model_params, times):
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds):
+def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, xBinSize  = 0.1, yBinSize  = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
@@ -89,21 +92,54 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     # setup non-systematics model (i.e. (star + planet) / star
     model         = transit_model*line_model
     
-    # multiply non-systematics model by systematics model (i.e. BLISS)
-    model        *= bliss.BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds]/model, knots, nearIndices)
+    # compute the systematics model (i.e. BLISS)
+    sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
+                                    ycenters[keep_inds], 
+                                    fluxes[keep_inds], 
+                                    knots, nearIndices, 
+                                    xBinSize  = xBinSize, 
+                                    yBinSize  = yBinSize
+                                 )
+    
+    model = model * sensitivity_map
     
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
 
-dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
+ap = argparse.ArgumentParser()
+ap.add_argument('-f', '--filename', type=str, required=True, default='centers_and_flux_data.joblib.save', help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-xb', '--xbinsize', type=float, required=False, default=0.1 )
+ap.add_argument('-yb', '--ybinsize', type=float, required=False, default=0.1 )
+
+args = vars(ap.parse_args())
+
+# dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
+dataDir     = args['filename']
+xBinSize    = args['xbinsize']
+yBinSize    = args['ybinsize']
+planet_name = args['planet_name']
+
+def exoparams_to_lmfit_params(planet_name):
+    ep_params   = exoparams.PlanetParams(planet_name)
+    iApRs       = ep_params.ar.value
+    iEcc        = ep_params.ecc.value
+    iInc        = ep_params.i.value
+    iPeriod     = ep_params.per.value
+    iTCenter    = ep_params.tt.value
+    iTdepth     = ep_params.depth.value
+    iOmega      = ep_params.om.value
+    
+    return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
+
+if planet_name[:-5] == '.json':
+    with open(planet_name, 'r') as file_in:
+        planet_json = json.load(file_in)
+else:
+    init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
+
+init_fpfs        = 500 / ppm
+init_u1, init_u2 = 0.1, 0.1
 
 times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
-
-interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
-                       knots, nearIndices, 
-                       xBinSize  = xBinSize, 
-                       yBinSize  = yBinSize, 
-                       normFactor= normFactor)
-y,x = 0,1
 
 initialParams = Parameters()
 
@@ -129,7 +165,7 @@ partial_residuals  = partial(residuals_func,
                              xcenters    = xcenters, 
                              ycenters    = ycenters, 
                              flux        = fluxes / np.median(fluxes), 
-                             fluxerr     = flux_errs / np.median(fluxes)
+                             fluxerr     = flux_errs / np.median(fluxes),
                              knots       = knots,
                              nearIndices = nearIndices,
                              keep_inds   = keep_inds
