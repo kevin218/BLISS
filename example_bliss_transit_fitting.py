@@ -1,5 +1,8 @@
+# EXAMPLE USAGE: python example_bliss_transit_fitting.py -f ../../data/group0_gsc.joblib.save -p 'GJ 1214 b'
+
 import argparse
 import BLISS as bliss
+import exoparams
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
@@ -86,7 +89,7 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     
     transit_model = transit_model(model_params, times[keep_inds])
     
-    line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) 
+    line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
     
     # setup non-systematics model (i.e. (star + planet) / star
@@ -106,16 +109,16 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
 
 ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename', type=str, required=True, default='centers_and_flux_data.joblib.save', help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-xb', '--xbinsize', type=float, required=False, default=0.1 )
-ap.add_argument('-yb', '--ybinsize', type=float, required=False, default=0.1 )
-
+ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+ap.add_argument('-xb', '--xbinsize'  , type=float, required=False, default=0.1, help='Stepsize in X-sigma to space the knots')
+ap.add_argument('-yb', '--ybinsize'  , type=float, required=False, default=0.1, help='Stepsize in Y-sigma to space the knots')
 args = vars(ap.parse_args())
 
 # dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 dataDir     = args['filename']
-xBinSize    = args['xbinsize']
-yBinSize    = args['ybinsize']
+xBinSize    = float(args['xbinsize'])
+yBinSize    = float(args['ybinsize'])
 planet_name = args['planet_name']
 
 def exoparams_to_lmfit_params(planet_name):
@@ -133,6 +136,13 @@ def exoparams_to_lmfit_params(planet_name):
 if planet_name[:-5] == '.json':
     with open(planet_name, 'r') as file_in:
         planet_json = json.load(file_in)
+    init_period = planet_json['period']
+    init_t0     = planet_json['t0']
+    init_aprs   = planet_json['aprs']
+    init_inc    = planet_json['inc']
+    init_tdepth = planet_json['tdepth']
+    init_ecc    = planet_json['ecc']
+    init_omega  = planet_json['omega']
 else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
 
