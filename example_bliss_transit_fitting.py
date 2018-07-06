@@ -47,22 +47,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     
     return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
 
-dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
-times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
-
-interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
-                       knots, nearIndices, 
-                       xBinSize  = xBinSize, 
-                       yBinSize  = yBinSize, 
-                       normFactor= normFactor)
-y,x = 0,1
-
-def batman_wrapper_lmfit(times, period, tCenter, inc, aprs, rprs, edepth, ecc, omega, u1, u2, 
-                         ldtype='quadratic', transitType='primary'):
-    
-
-  
 def transit_model(model_params, times):
     # Transit Parameters
     u1      = model_params['u1'].value
@@ -91,21 +76,34 @@ def transit_model(model_params, times):
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices):
+def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model(model_params, times)
-    line_model    = intcpt + slope*(times-times.mean()) + crvtur*(times-times.mean())**2.
+    transit_model = transit_model(model_params, times[keep_inds])
+    
+    line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) 
+                           + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
     
     # setup non-systematics model (i.e. (star + planet) / star
     model         = transit_model*line_model
     
     # multiply non-systematics model by systematics model (i.e. BLISS)
-    model        *= bliss.BLISS(xcenters, ycenters fluxes/model, knots, nearIndices)
+    model        *= bliss.BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds]/model, knots, nearIndices)
     
-    return (model - fluxes) / flux_errs
+    return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
+
+dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
+
+times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
+
+interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
+                       knots, nearIndices, 
+                       xBinSize  = xBinSize, 
+                       yBinSize  = yBinSize, 
+                       normFactor= normFactor)
+y,x = 0,1
 
 initialParams = Parameters()
 
@@ -133,7 +131,8 @@ partial_residuals  = partial(residuals_func,
                              flux        = fluxes / np.median(fluxes), 
                              fluxerr     = flux_errs / np.median(fluxes)
                              knots       = knots,
-                             nearIndices = nearIndices
+                             nearIndices = nearIndices,
+                             keep_inds   = keep_inds
                              )
 
 # Setup up the call to minimize the residuals (i.e. ChiSq)
