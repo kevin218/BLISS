@@ -28,10 +28,13 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         ySigmaRange (float): relative distance in gaussian sigma space to reject y-outliers
 
     Returns:
-        points (nDarray): X and Y positions for centering analysis
+        xcenters (nDarray): X positions for centering analysis
+        ycenters (nDarray): Y positions for centering analysis
         fluxes (nDarray): normalized photon counts from raw data
+        flux_err (nDarray): normalized photon uncertainties
         knots (nDarray): locations and initial flux values (weights) for interpolation grid
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
+        keep_inds (list): list of indicies to keep within the thresholds set
     
     """
     times, xcenter, ycenters, fluxes, flux_errs = extractData(dataDir)
