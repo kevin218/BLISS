@@ -2,8 +2,10 @@ import BLISS as BLISS
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
+from os import environ
+
 y,x = 0,1
-dataDir = "/Users/cmunoz/Desktop/Research/GJ1214/data/group0_gsc.joblib.save"
+dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 xBinSize = 0.01
 yBinSize = 0.01
 xSigmaRange = 3
