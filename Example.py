@@ -38,28 +38,26 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
     
     points = np.array(list(zip(xcenter, ycenters)))
     
-    (xcenters, ycenters), fluxes = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
+    keep_inds = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     
-    knots = createGrid(points, xBinSize, yBinSize)
+    knots = createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
     knotTree = spatial.KDTree(knots)
-    nearIndices = nearestIndices(points, knotTree)
+    nearIndices = nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
-    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices
+    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
 times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
 
-interpolFluxes = BLISS(points, fluxes, knots, nearIndices, 
-                       xBinSize=xBinSize, yBinSize = yBinSize, 
-                       normFactor=normFactor)
-
-if not isinstance(points, np.ndarray): points = np.array(points)
-
+interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
+                       knots, nearIndices, 
+                       xBinSize  = xBinSize, 
+                       yBinSize  = yBinSize, 
+                       normFactor= normFactor)
 y,x = 0,1
 
-# plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
-plt.scatter(points.T[x], points.T[y], s=0.1, c=interpolFluxes)
+plt.scatter(xcenters[keep_inds], ycenters[keep_inds], s=0.1, c=interpolFluxes)
 plt.colorbar()
 plt.show()
