@@ -27,7 +27,7 @@ def nearest(point, neighbors, tree):
     return neighbors[1]
 
 
-def removeOutliers(point_list, flux_list, x_sigma_cutoff=3, y_sigma_cutoff=3):
+def removeOutliers(point_list, flux_list, x_sigma_cutoff=4, y_sigma_cutoff=4):
     """
         Args:
         point_list (list): list of lists with (x,y) coordinates of centers.
