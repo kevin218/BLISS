@@ -1,8 +1,9 @@
 import BLISS as BLISS
 import matplotlib.pyplot as plt
-from scipy import spatial 
 
+from lmfit import Minimizer, Parameters
 from os import environ
+from scipy import spatial 
 
 def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRange=3, ySigmaRange=3):
     """This function takes in the filename of the data (stored with sklearn-joblib),
@@ -34,14 +35,14 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
     
     """
-    points, fluxes = extractData(dataDir)
+    times, points, fluxes, flux_errs = extractData(dataDir)
     points, fluxes = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     knots = createGrid(points, xBinSize, yBinSize)
-    knotTree = spatial.KDTree(knots)
+    knotTree = spatial.cKDTree(knots)
     nearIndices = nearestIndices(points, knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
-    return points, fluxes, knots, nearIndices
+    return times, points, fluxes, flux_errs, knots, nearIndices
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
@@ -55,7 +56,25 @@ if not isinstance(points, np.ndarray): points = np.array(points)
 
 y,x = 0,1
 
-# plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
-plt.scatter(points.T[x], points.T[y], s=0.1, c=interpolFluxes)
-plt.colorbar()
-plt.show()
+def residuals_func(model_params, times, flux, fluxerr):
+    model = transit_line_model(model_params, times)
+    return (model - flux) / fluxerr
+
+partial_residualspartial_  = partial(residuals_func, 
+                            times  = timeSliceKmod, 
+                            flux   = fluxSliceK / np.median(fluxSliceK), 
+                            fluxerr= ferrSliceK / np.median(fluxSliceK)
+                            )
+
+mle0  = Minimizer(partial_residuals, initialParams)
+
+start = time()
+fitResult = mle0.leastsq()
+print("LMFIT operation took {} seconds".format(time()-start))
+
+report_errors(fitResult.params)
+
+# # plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
+# plt.scatter(points.T[x], points.T[y], s=0.1, c=interpolFluxes)
+# plt.colorbar()
+# plt.show()
