@@ -7,11 +7,13 @@ y, x = 0, 1
 
 def extractData(file):
     group = joblib.load(file)
+    times = group[b'times'].flatten()
     xcenters = group[b'centers'][0, :, :, x].flatten()
     ycenters = group[b'centers'][0, :, :, y].flatten()
     fluxes = group[b'phots'][0, -1].flatten()
-    points = zip(xcenters, ycenters)
-    return list(points), fluxes
+    flux_errs = group[b'photserr'][0, -1].flatten()
+    # points = np.array([xcenters, ycenters])
+    return times, xcenter, ycenters, fluxes, flux_errs
 
 def nearest(point, neighbors, tree):
     """
