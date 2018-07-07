@@ -3,7 +3,8 @@ from sklearn.externals import joblib
 from pylab import *;
 
 y, x = 0, 1
-
+dict_keys([b'noise', b'transit', b'filenames', b'radii', b'phots', b'counts', b'skybg', 
+b'centers', b'times', b'widths', b'heights', b'stat_decor'])
 
 def extractData(file):
     group = joblib.load(file)
@@ -11,7 +12,7 @@ def extractData(file):
     xcenters = group[b'centers'][0, :, :, x].flatten()
     ycenters = group[b'centers'][0, :, :, y].flatten()
     fluxes = group[b'phots'][0, -1].flatten()
-    flux_errs = group[b'photserr'][0, -1].flatten()
+    flux_errs = sqrt(flux)
     # points = np.array([xcenters, ycenters])
     return times, xcenter, ycenters, fluxes, flux_errs
 
