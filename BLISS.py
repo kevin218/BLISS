@@ -12,7 +12,8 @@ def extractData(file):
     xcenters = group[b'centers'][0, :, :, x].flatten()
     ycenters = group[b'centers'][0, :, :, y].flatten()
     fluxes = group[b'phots'][0, -1].flatten()
-    flux_errs = sqrt(fluxes)
+    flux_errs = sqrt(fluxes) / np.median(fluxes)
+    fluxes = fluxes / np.median(fluxes)
     return times, xcenters, ycenters, fluxes, flux_errs
 
 def nearest(xc,yc, neighbors, tree):

@@ -50,7 +50,8 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     """
     times, xcenters, ycenters, fluxes, flux_errs = bliss.extractData(dataDir)
     
-    keep_inds = bliss.removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
+    keep_inds = bliss.removeOutliers(xcenters, ycenters, x_sigma_cutoff=xSigmaRange, y_sigma_cutoff=ySigmaRange)
+    #, fSigmaRange)
     
     knots = bliss.createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
     knotTree = spatial.cKDTree(knots)
@@ -200,7 +201,24 @@ init_u1, init_u2 = 0.1, 0.1
 
 times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
+len_init_t0 = len(str(int(init_t0)))
+len_times = len(str(int(times.mean())))
+
+# Check if `init_t0` is in JD or MJD
+if len_init_t0 == 7 and len_times != 7:
+    if len_times == 5:
+        init_t0 = init_t0 - 2400000.5
+    elif len_times == 4:
+        init_t0 = init_t0 - 2450000.5
+    else:
+        raise ValueError('The `init_t0` is {} and `times.mean()` is {}'.format(int(init_t0), int(times.mean())))
+
+# Check if `init_t0` is in MJD or Simplified-MJD
+if len(str(int(init_t0))) > len(str(int(times.mean()))): init_t0 = init_t0 - 50000
+
 initialParams = Parameters()
+
+# fluxes_std = np.std(fluxes/np.median(fluxes))
 
 initialParams.add_many(
     ('period'   , init_period, False),
@@ -213,7 +231,7 @@ initialParams.add_many(
     ('omega'    , init_omega , False, 0.0, 1.0 ),
     ('u1'       , init_u1    , True , 0.0, 1.0 ),
     ('u2'       , init_u2    , True , 0.0, 1.0 ),
-    ('intcpt'   , 1.0        , True ),
+    ('intcpt'   , 1.0        , True ),#, 1.0-1e-3 + 1.0+1e-3),
     ('slope'    , 0.0        , True ),
     ('crvtur'   , 0.0        , False))
 
@@ -241,7 +259,6 @@ print("LMFIT operation took {} seconds".format(time()-start))
 
 report_errors(fitResult.params)
 
-
 bf_model_set = generate_best_fit_solution(fitResult.params, 
                                             times, xcenters, ycenters, fluxes / np.median(fluxes), 
                                             knots, nearIndices, keep_inds, 
@@ -258,18 +275,22 @@ ax12 = fig1.add_subplot(222)
 ax21 = fig1.add_subplot(223)
 ax22 = fig1.add_subplot(224)
 
-ax11.scatter(xcenters, fluxes, s=0.1, alpha=0.1)
-ax12.scatter(ycenters, fluxes, s=0.1, alpha=0.1)
+print('FINDME:', (fluxes[keep_inds]).mean(), 
+        bf_full_model.mean(), bf_line_model.mean(), bf_transit_model.mean(), bf_bliss_map.mean())
+
+ax11.scatter(xcenters[keep_inds], fluxes[keep_inds], s=0.1, alpha=0.1)
+ax12.scatter(ycenters[keep_inds], fluxes[keep_inds], s=0.1, alpha=0.1)
 ax21.scatter(xcenters[keep_inds], ycenters[keep_inds], 
-                s=0.1, alpha=0.1, c=bf_bliss_map)
+                s=0.1, alpha=0.1, c=bf_bliss_map*bf_line_model)
 ax22.scatter(xcenters[keep_inds], ycenters[keep_inds], 
                 s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)**2)
 
 fig2 = plt.figure()
-ax1  = fig2.add_subplot(211)
-ax2  = fig2.add_subplot(212)
-ax1.scatter(times[keep_inds], fluxes[keep_inds] / np.median(fluxes[keep_inds]))
-ax1.scatter(times[keep_inds], bf_bliss_map)
-ax2.scatter(times[keep_inds], (fluxes[keep_inds] - bf_full_model))
+ax1 = fig2.add_subplot(211)
+ax2 = fig2.add_subplot(212)
+ax1.scatter(times[keep_inds], fluxes[keep_inds] , s=0.1, alpha=0.1)
+# ax1.scatter(times[keep_inds], bf_bliss_map*bf_line_model, s=0.1, alpha=0.1)
+ax1.scatter(times[keep_inds], bf_full_model, s=0.1, alpha=0.1)
+ax2.scatter(times[keep_inds], (fluxes[keep_inds] - bf_full_model), s=0.1, alpha=0.1)
 
 plt.show()
