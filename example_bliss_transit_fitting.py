@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from functools import partial
-from lmfit import Parameters, Minimizer
+from lmfit import Parameters, Minimizer, report_errors
 from os import environ
 from scipy import spatial 
 from time import time
@@ -62,7 +62,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
 def deltaphase_eclipse(ecc, omega):
     return 0.5*( 1 + (4. / pi) * ecc * cos(omega))
 
-def transit_model_func(model_params, times, ldtype='quadratic', transittype='primary'):
+def transit_model_func(model_params, times, ldtype='quadratic', transitType='primary'):
     # Transit Parameters
     u1      = model_params['u1'].value
     u2      = model_params['u2'].value
@@ -123,6 +123,39 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     model = model * sensitivity_map
     
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
+
+def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, 
+                                xBinSize  = 0.1, yBinSize  = 0.1):
+    intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
+    slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
+    crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
+    
+    transit_model = transit_model_func(model_params, times[keep_inds])
+    
+    line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
+                           + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
+    
+    # setup non-systematics model (i.e. (star + planet) / star
+    model         = transit_model*line_model
+    
+    # compute the systematics model (i.e. BLISS)
+    sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
+                                    ycenters[keep_inds], 
+                                    fluxes[keep_inds], 
+                                    knots, nearIndices, 
+                                    xBinSize  = xBinSize, 
+                                    yBinSize  = yBinSize
+                                 )
+    
+    model = model * sensitivity_map
+    
+    output = {}
+    output['full_model'] = model
+    output['line_model'] = line_model
+    output['transit_model'] = transit_model
+    output['bliss_map'] = sensitivity_map
+    
+    return output
 
 ap = argparse.ArgumentParser()
 ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
@@ -208,20 +241,35 @@ print("LMFIT operation took {} seconds".format(time()-start))
 
 report_errors(fitResult.params)
 
-fig1 = figure()
-ax11= fig1.add_subplot(221)
-ax12= fig1.add_subplot(222)
-ax21= fig1.add_subplot(223)
-ax22= fig1.add_subplot(224)
+
+bf_model_set = generate_best_fit_solution(fitResult.params, 
+                                            times, xcenters, ycenters, fluxes / np.median(fluxes), 
+                                            knots, nearIndices, keep_inds, 
+                                            xBinSize  = xBinSize, yBinSize  = yBinSize)
+
+bf_full_model = bf_model_set['full_model']
+bf_line_model = bf_model_set['line_model']
+bf_transit_model = bf_model_set['transit_model']
+bf_bliss_map = bf_model_set['bliss_map']
+
+fig1 = plt.figure()
+ax11 = fig1.add_subplot(221)
+ax12 = fig1.add_subplot(222)
+ax21 = fig1.add_subplot(223)
+ax22 = fig1.add_subplot(224)
 
 ax11.scatter(xcenters, fluxes, s=0.1, alpha=0.1)
 ax12.scatter(ycenters, fluxes, s=0.1, alpha=0.1)
-ax21.scatter(xcenters, ycenters, s=0.1, alpha=0.1, c=interpolFluxes)
-ax22.scatter(xcenters, ycenters, s=0.1, alpha=0.1, c=(fluxes-interpolFluxes)**2)
+ax21.scatter(xcenters[keep_inds], ycenters[keep_inds], 
+                s=0.1, alpha=0.1, c=bf_bliss_map)
+ax22.scatter(xcenters[keep_inds], ycenters[keep_inds], 
+                s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)**2)
 
-fig2 = figure()
-ax1   = fig2.add_subplot(211)
-ax2   = fig2.add_subplot(212)
-ax1.scatter(times, fluxes)
-ax1.scatter(times, interpolFluxes)
-ax2.scatter(times, fluxes - interpolFluxes)
+fig2 = plt.figure()
+ax1  = fig2.add_subplot(211)
+ax2  = fig2.add_subplot(212)
+ax1.scatter(times[keep_inds], fluxes[keep_inds] / np.median(fluxes[keep_inds]))
+ax1.scatter(times[keep_inds], bf_bliss_map)
+ax2.scatter(times[keep_inds], (fluxes[keep_inds] - bf_full_model))
+
+plt.show()

@@ -110,25 +110,26 @@ def interpolateFlux(knots, knotFluxes, deltaX1, deltaY1, nearIndices, xBinSize, 
 
         """
     
-    interpolated_fluxes = []
+    interpolated_fluxes = np.zeros(len(deltaX1))
     
-    for kp, (xc,yc) in enumerate(zip(xcenters, ycenters)):
+    for kp, (dx1,dy1) in enumerate(zip(deltaX1, deltaY1)):
         nearest_fluxes = [knotFluxes[i] for i in nearIndices[kp]]
         # If any knot has no flux, use nearest neighbor interpolation.
         if 0 in nearest_fluxes:
             N = nearIndices[kp][0]
-            interpolated_fluxes.append(knotFluxes[N])
+            interpolated_fluxes[kp] = knotFluxes[N]
         # Else, do bilinear interpolation
         else:
             # Normalize distances with factor
             # Interpolate
-            deltaX2 = xBinSize - deltaX1[kp]
-            deltaY2 = xBinSize - deltaY1[kp]
+            dx2 = xBinSize - dx1
+            dy2 = xBinSize - dy1
             
-            interpolated_fluxes.append(normFactor * (deltaX1[kp] * deltaY2     * nearest_fluxes[0]
-                                                   + deltaX2     * deltaY2     * nearest_fluxes[1]
-                                                   + deltaX2     * deltaY1[kp] * nearest_fluxes[2]
-                                                   + deltaX1[kp] * deltaY1[kp] * nearest_fluxes[3]))
+            interpolated_fluxes[kp] = normFactor * (dx1 * dy2 * nearest_fluxes[0]
+                                                  + dx2 * dy2 * nearest_fluxes[1]
+                                                  + dx2 * dy1 * nearest_fluxes[2]
+                                                  + dx1 * dy1 * nearest_fluxes[3])
+    
     return interpolated_fluxes
 
 def nearestIndices(xcenters, ycenters, knotTree):
