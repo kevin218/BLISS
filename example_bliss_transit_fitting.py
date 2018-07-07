@@ -43,7 +43,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
         keep_inds (list): list of indicies to keep within the thresholds set
     
     """
-    times, xcenter, ycenters, fluxes, flux_errs = bliss.extractData(dataDir)
+    times, xcenters, ycenters, fluxes, flux_errs = bliss.extractData(dataDir)
     
     keep_inds = bliss.removeOutliers(xcenters, ycenters, fluxes, xSigmaRange, ySigmaRange, fSigmaRange)
     
