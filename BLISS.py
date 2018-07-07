@@ -14,7 +14,7 @@ def extractData(file):
     fluxes = group[b'phots'][0, -1].flatten()
     flux_errs = sqrt(fluxes)
     # points = np.array([xcenters, ycenters])
-    return times, xcenter, ycenters, fluxes, flux_errs
+    return times, xcenters, ycenters, fluxes, flux_errs
 
 def nearest(point, neighbors, tree):
     """
