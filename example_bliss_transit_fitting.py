@@ -1,12 +1,17 @@
 # EXAMPLE USAGE: python example_bliss_transit_fitting.py -f ../../data/group0_gsc.joblib.save -p 'GJ 1214 b'
 
 import argparse
+import batman
 import BLISS as bliss
 import exoparams
 import matplotlib.pyplot as plt
-from scipy import spatial 
+import numpy as np
 
+from functools import partial
+from lmfit import Parameters, Minimizer
 from os import environ
+from scipy import spatial 
+from time import time
 
 y,x = 0,1
 ppm = 1e6
@@ -51,17 +56,27 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     knotTree = spatial.cKDTree(knots)
     nearIndices = bliss.nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     
-    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
+    return times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds
 
 
-def transit_model(model_params, times):
+def deltaphase_eclipse(ecc, omega):
+    return 0.5*( 1 + (4. / pi) * ecc * cos(omega))
+
+def transit_model_func(model_params, times, ldtype='quadratic', transittype='primary'):
     # Transit Parameters
     u1      = model_params['u1'].value
     u2      = model_params['u2'].value
     
-    if edepth > 0:
-      delta_phase = deltaphase_eclipse(ecc, omega) if ecc is not 0.0 else 0.5
-      t_secondary = tCenter + period*delta_phase
+    if 'edepth' in model_params.keys() and model_params['edepth'] > 0:
+        if 'ecc' in model_params.keys() and 'omega' in model_params.keys() and model_params['ecc'] > 0:
+            delta_phase = deltaphase_eclipse(model_params['ecc'], model_params['omega'])
+        else:
+            delta_phase = 0.5
+        
+        t_secondary = model_params['tCenter'] + model_params['period']*delta_phase
+        
+    else:
+        model_params.add('edepth', 0.0, False)
     
     rprs  = np.sqrt(model_params['tdepth'].value)
     
@@ -82,12 +97,13 @@ def transit_model(model_params, times):
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, xBinSize  = 0.1, yBinSize  = 0.1):
+def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
+                    xBinSize  = 0.1, yBinSize  = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model(model_params, times[keep_inds])
+    transit_model = transit_model_func(model_params, times[keep_inds])
     
     line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
@@ -149,7 +165,7 @@ else:
 init_fpfs        = 500 / ppm
 init_u1, init_u2 = 0.1, 0.1
 
-times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
+times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
 initialParams = Parameters()
 
@@ -158,7 +174,7 @@ initialParams.add_many(
     ('tCenter'  , init_t0    , True , init_t0 - 0.1, init_t0 + 0.1),
     ('inc'      , init_inc   , False, 80.0, 90.),
     ('aprs'     , init_aprs  , False, 0.0, 100.),
-    ('tdepth'   , init_rprs  , True , 0.0, 0.3 ),
+    ('tdepth'   , init_tdepth, True , 0.0, 0.3 ),
     ('edepth'   , init_fpfs  , False, 0.0, 0.05),
     ('ecc'      , init_ecc   , False, 0.0, 1.0 ),
     ('omega'    , init_omega , False, 0.0, 1.0 ),
@@ -174,8 +190,8 @@ partial_residuals  = partial(residuals_func,
                              times       = times,
                              xcenters    = xcenters, 
                              ycenters    = ycenters, 
-                             flux        = fluxes / np.median(fluxes), 
-                             fluxerr     = flux_errs / np.median(fluxes),
+                             fluxes      = fluxes / np.median(fluxes), 
+                             flux_errs   = flux_errs / np.median(fluxes),
                              knots       = knots,
                              nearIndices = nearIndices,
                              keep_inds   = keep_inds
