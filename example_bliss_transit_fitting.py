@@ -351,7 +351,6 @@ ax22.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
 ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
 
 mng = plt.get_current_fig_manager()
-mng.window.showMaximized()
 # plt.tight_layout()
 
 print('Plotting the Time Series')
@@ -367,7 +366,6 @@ ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format
 ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
 
 mng = plt.get_current_fig_manager()
-mng.window.showMaximized()
 # plt.tight_layout()
 
 plt.show()
