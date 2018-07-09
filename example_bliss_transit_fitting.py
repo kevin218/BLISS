@@ -197,7 +197,17 @@ if planet_name[-5:] == '.json':
     init_t0     = planet_json['t0']
     init_aprs   = planet_json['aprs']
     init_inc    = planet_json['inc']
-    init_tdepth = planet_json['tdepth']
+    
+    if 'tdepth' in planet_json.keys():
+        init_tdepth   = planet_json['tdepth']
+    elif 'rprs' in planet_json.keys():
+        init_tdepth   = planet_json['rprs']**2
+    elif 'rp' in planet_json.keys():
+        init_tdepth   = planet_json['rp']**2
+    else:
+        raise ValueError("Eitehr `tdepth` or `rprs` or `rp` (in relative units) \
+                            must be included in {}".format(planet_name))
+    
     init_fpfs   = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
     init_ecc    = planet_json['ecc']
     init_omega  = planet_json['omega']
@@ -312,6 +322,12 @@ ax21.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
 ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
                 s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)[good_bf]**2)
 
+
+ax11.title('Xcenters vs Normalized Flux')
+ax21.title('Ycenters vs Normalized Flux')
+ax12.title('X\&Y Centers vs Bliss Map')
+ax22.title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
+
 print('Plotting the Time Series')
 
 fig2 = plt.figure()
@@ -320,5 +336,8 @@ ax2 = fig2.add_subplot(212)
 ax1.scatter(times[keep_inds][good_bf], fluxes[keep_inds][good_bf] , s=0.1, alpha=0.1)
 ax1.scatter(times[keep_inds][good_bf], bf_full_model[good_bf], s=0.1, alpha=0.1)
 ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_bf], s=0.1, alpha=0.1)
+
+ax1.title('GJ 1214 b Raw CH2 Light Curve with BLISS + Linear + BATMAN Model')
+ax2.title('GJ 1214 b Raw CH2 Residuals (blue - orange above)')
 
 plt.show()
