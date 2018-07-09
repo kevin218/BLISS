@@ -215,9 +215,18 @@ if planet_name[-5:] == '.json':
     init_u2     = planet_json['u2'] if 'u2' in planet_json.keys() else None
     init_u3     = planet_json['u3'] if 'u3' in planet_json.keys() else None
     init_u4     = planet_json['u4'] if 'u4' in planet_json.keys() else None
+    
+    if 'planet name' in planet_json.keys():
+        planet_name = planet_json['planet name']
+    else:
+        # Assume the json file name is the planet name
+        #   This is a bad assumption; but it is one that users will understand
+        print("'planet name' is not inlcude in {};".format(planet_name), end=" ")
+        planet_name = planet_name.split('.json')[0]
+        print(" assuming the 'planet name' is {}".format(planet_name))    
 else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
-        
+
 init_fpfs = 500 / ppm if init_fpfs is None else init_fpfs
 init_u1   = 0.1 if init_u1 is None else init_u1
 init_u2   = 0.0 if init_u2 is None else init_u2
@@ -322,11 +331,28 @@ ax21.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
 ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
                 s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)[good_bf]**2)
 
+ax11.set_title('Xcenters vs Normalized Flux')
+ax21.set_title('Ycenters vs Normalized Flux')
+ax12.set_title('X\&Y Centers vs Bliss Map')
+ax22.set_title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
 
-ax11.title('Xcenters vs Normalized Flux')
-ax21.title('Ycenters vs Normalized Flux')
-ax12.title('X\&Y Centers vs Bliss Map')
-ax22.title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
+nSig = 3
+xCtr = xcenters[keep_inds][good_bf].mean()
+xSig = xcenters[keep_inds][good_bf].std()
+
+yCtr = ycenters[keep_inds][good_bf].mean()
+ySig = ycenters[keep_inds][good_bf].std()
+
+ax11.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+ax12.set_xlim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+ax21.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+ax21.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+ax22.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+
+mng = plt.get_current_fig_manager()
+mng.window.showMaximized()
+# plt.tight_layout()
 
 print('Plotting the Time Series')
 
@@ -337,7 +363,11 @@ ax1.scatter(times[keep_inds][good_bf], fluxes[keep_inds][good_bf] , s=0.1, alpha
 ax1.scatter(times[keep_inds][good_bf], bf_full_model[good_bf], s=0.1, alpha=0.1)
 ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_bf], s=0.1, alpha=0.1)
 
-ax1.title('GJ 1214 b Raw CH2 Light Curve with BLISS + Linear + BATMAN Model')
-ax2.title('GJ 1214 b Raw CH2 Residuals (blue - orange above)')
+ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format(planet_name))
+ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
+
+mng = plt.get_current_fig_manager()
+mng.window.showMaximized()
+# plt.tight_layout()
 
 plt.show()
