@@ -1,4 +1,5 @@
 # EXAMPLE USAGE: python example_bliss_transit_fitting.py -f ../../data/group0_gsc.joblib.save -p 'GJ 1214 b'
+from scipy import special
 
 import argparse
 import batman
@@ -7,35 +8,39 @@ import exoparams
 import json
 import matplotlib.pyplot as plt
 import numpy as np
-
+from sklearn.externals import joblib
 from functools import partial
 from lmfit import Parameters, Minimizer, report_errors
 from os import environ
-from scipy import spatial 
+from scipy import spatial
 from statsmodels.robust import scale
 from time import time
-
+from bokeh.io       import output_notebook, show
+from bokeh.plotting import figure
+from bokeh.models   import Span
+from bokeh.layouts  import gridplot
+from pandas import DataFrame
 y,x = 0,1
 ppm = 1e6
 
-def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, 
+def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
                                  xSigmaRange=4, ySigmaRange=4, fSigmaRange=4):
     """This function takes in the filename of the data (stored with sklearn-joblib),
-        checks the data for outliers, establishes the interpolation grid, 
-        computes the nearest neighbours between all data points and that grid, 
+        checks the data for outliers, establishes the interpolation grid,
+        computes the nearest neighbours between all data points and that grid,
         and outputs the necessary values for using BLISS
-        
-        The `flux` is assumed to be pure stellar signal -- i.e. no planet. 
+
+        The `flux` is assumed to be pure stellar signal -- i.e. no planet.
         BLISS is expected to be used inside a fitting routine where the transit has been `divided out`.
         This example here assumes that there is no transit or eclipse in the light curve data (i.e. `flux` == 'stellar flux').
         To use this with a light curve that contains a transit or eclipse, send the "residuals" to BLISS:
             - i.e. `flux = system_flux / transit_model`
-    
+
     Written by C.Munoz 07-05-18
     Edited by J.Fraine 07-06-18
     Args:
         dataDir (str): the directory location for the joblib file containing the x,y,flux information
-        
+
         xBinSize (float): distance in x-dimension to space interpolation grid
         yBinSize (float): distance in y-dimension to space interpolation grid
         xSigmaRange (float): relative distance in gaussian sigma space to reject x-outliers
@@ -48,17 +53,17 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
         knots (nDarray): locations and initial flux values (weights) for interpolation grid
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
         keep_inds (list): list of indicies to keep within the thresholds set
-    
+
     """
     times, xcenters, ycenters, fluxes, flux_errs = bliss.extractData(dataDir)
-    
+
     keep_inds = bliss.removeOutliers(xcenters, ycenters, x_sigma_cutoff=xSigmaRange, y_sigma_cutoff=ySigmaRange)
     #, fSigmaRange)
-    
+
     knots = bliss.createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
     knotTree = spatial.cKDTree(knots)
     nearIndices = bliss.nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
-    
+
     return times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds
 
 def deltaphase_eclipse(ecc, omega):
@@ -68,22 +73,22 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     # Transit Parameters
     u1      = model_params['u1'].value
     u2      = model_params['u2'].value
-    
+
     if 'edepth' in model_params.keys() and model_params['edepth'] > 0:
         if 'ecc' in model_params.keys() and 'omega' in model_params.keys() and model_params['ecc'] > 0:
             delta_phase = deltaphase_eclipse(model_params['ecc'], model_params['omega'])
         else:
             delta_phase = 0.5
-        
+
         t_secondary = model_params['tCenter'] + model_params['period']*delta_phase
-        
+
     else:
         model_params.add('edepth', 0.0, False)
-    
+
     rprs  = np.sqrt(model_params['tdepth'].value)
-    
+
     bm_params           = batman.TransitParams() # object to store transit parameters
-    
+
     bm_params.per       = model_params['period'].value   # orbital period
     bm_params.t0        = model_params['tCenter'].value  # time of inferior conjunction
     bm_params.inc       = model_params['inc'].value      # inclunaition in degrees
@@ -94,73 +99,73 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     bm_params.w         = model_params['omega'].value    # longitude of periastron (in degrees)
     bm_params.limb_dark = ldtype   # limb darkening model # NEED TO FIX THIS
     bm_params.u         = [u1, u2] # limb darkening coefficients # NEED TO FIX THIS
-    
+
     m_eclipse = batman.TransitModel(bm_params, times, transittype=transitType)# initializes model
-    
+
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
+def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds,
                     xBinSize  = 0.1, yBinSize  = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
-    
+
     transit_model = transit_model_func(model_params, times[keep_inds])
-    
+
     line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
-    
+
     # setup non-systematics model (i.e. (star + planet) / star
     model         = transit_model*line_model
-    
+
     # compute the systematics model (i.e. BLISS)
-    sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
-                                    ycenters[keep_inds], 
-                                    fluxes[keep_inds], 
-                                    knots, nearIndices, 
-                                    xBinSize  = xBinSize, 
+    sensitivity_map = bliss.BLISS(  xcenters[keep_inds],
+                                    ycenters[keep_inds],
+                                    fluxes[keep_inds],
+                                    knots, nearIndices,
+                                    xBinSize  = xBinSize,
                                     yBinSize  = yBinSize
                                  )
-    
+
     nSig = 10
     vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
     sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
-    
+
     model = model * sensitivity_map
-    
+
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
 
-def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, 
+def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds,
                                 xBinSize  = 0.1, yBinSize  = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
-    
+
     transit_model = transit_model_func(model_params, times[keep_inds])
-    
+
     line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
-    
+
     # setup non-systematics model (i.e. (star + planet) / star
     model         = transit_model*line_model
-    
+
     # compute the systematics model (i.e. BLISS)
-    sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
-                                    ycenters[keep_inds], 
-                                    fluxes[keep_inds], 
-                                    knots, nearIndices, 
-                                    xBinSize  = xBinSize, 
+    sensitivity_map = bliss.BLISS(  xcenters[keep_inds],
+                                    ycenters[keep_inds],
+                                    fluxes[keep_inds],
+                                    knots, nearIndices,
+                                    xBinSize  = xBinSize,
                                     yBinSize  = yBinSize
                                  )
-    
+
     model = model * sensitivity_map
-    
+
     output = {}
     output['full_model'] = model
     output['line_model'] = line_model
     output['transit_model'] = transit_model
     output['bliss_map'] = sensitivity_map
-    
+
     return output
 
 def exoparams_to_lmfit_params(planet_name):
@@ -172,7 +177,7 @@ def exoparams_to_lmfit_params(planet_name):
     iTCenter    = ep_params.tt.value
     iTdepth     = ep_params.depth.value
     iOmega      = ep_params.om.value
-    
+
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
 ap = argparse.ArgumentParser()
@@ -197,7 +202,7 @@ if planet_name[-5:] == '.json':
     init_t0     = planet_json['t0']
     init_aprs   = planet_json['aprs']
     init_inc    = planet_json['inc']
-    
+
     if 'tdepth' in planet_json.keys():
         init_tdepth   = planet_json['tdepth']
     elif 'rprs' in planet_json.keys():
@@ -207,7 +212,7 @@ if planet_name[-5:] == '.json':
     else:
         raise ValueError("Eitehr `tdepth` or `rprs` or `rp` (in relative units) \
                             must be included in {}".format(planet_name))
-    
+
     init_fpfs   = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
     init_ecc    = planet_json['ecc']
     init_omega  = planet_json['omega']
@@ -215,7 +220,7 @@ if planet_name[-5:] == '.json':
     init_u2     = planet_json['u2'] if 'u2' in planet_json.keys() else None
     init_u3     = planet_json['u3'] if 'u3' in planet_json.keys() else None
     init_u4     = planet_json['u4'] if 'u4' in planet_json.keys() else None
-    
+
     if 'planet name' in planet_json.keys():
         planet_name = planet_json['planet name']
     else:
@@ -223,7 +228,7 @@ if planet_name[-5:] == '.json':
         #   This is a bad assumption; but it is one that users will understand
         print("'planet name' is not inlcude in {};".format(planet_name), end=" ")
         planet_name = planet_name.split('.json')[0]
-        print(" assuming the 'planet name' is {}".format(planet_name))    
+        print(" assuming the 'planet name' is {}".format(planet_name))
 else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
 
@@ -274,11 +279,11 @@ initialParams.add_many(
 
 # Reduce the number of inputs in the objective function sent to LMFIT
 #   by setting the static vectors as static in the wrapper function
-partial_residuals  = partial(residuals_func, 
+partial_residuals  = partial(residuals_func,
                              times       = times,
-                             xcenters    = xcenters, 
-                             ycenters    = ycenters, 
-                             fluxes      = fluxes / np.median(fluxes), 
+                             xcenters    = xcenters,
+                             ycenters    = ycenters,
+                             fluxes      = fluxes / np.median(fluxes),
                              flux_errs   = flux_errs / np.median(fluxes),
                              knots       = knots,
                              nearIndices = nearIndices,
@@ -298,9 +303,9 @@ print("LMFIT operation took {} seconds".format(time()-start))
 report_errors(fitResult.params)
 
 print('Establishing the Best Fit Solution')
-bf_model_set = generate_best_fit_solution(fitResult.params, 
-                                            times, xcenters, ycenters, fluxes / np.median(fluxes), 
-                                            knots, nearIndices, keep_inds, 
+bf_model_set = generate_best_fit_solution(fitResult.params,
+                                            times, xcenters, ycenters, fluxes / np.median(fluxes),
+                                            knots, nearIndices, keep_inds,
                                             xBinSize  = xBinSize, yBinSize  = yBinSize)
 
 bf_full_model = bf_model_set['full_model']
@@ -311,11 +316,6 @@ bf_bliss_map = bf_model_set['bliss_map']
 nSig = 10
 good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
 
-# print('FINDME:', (fluxes[keep_inds]).mean(),
-#         bf_full_model.mean(), bf_line_model.mean(), bf_transit_model.mean(), bf_bliss_map.mean())
-
-# plt.hist(bf_full_model,bins=bf_full_model.size//10)
-# plt.show()
 
 print('Plotting the Correlations')
 fig1 = plt.figure()
@@ -369,3 +369,82 @@ mng = plt.get_current_fig_manager()
 # plt.tight_layout()
 
 plt.show()
+
+mle0.params.add('f', value=1, min=0.001, max=2)
+
+def lnprob(p):
+    resid = partial_residuals(p)
+    s = p['f']
+    resid *= 1 / s
+    resid *= resid
+    resid += np.log(2 * np.pi * s**2)
+    return -0.5 * np.sum(resid)
+
+
+mini  = Minimizer(lnprob, mle0.params)
+
+start = time()
+
+res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
+                    pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
+                    is_weighted=True, seed=None)
+
+#
+print("MCMC operation took {} seconds".format(time()-start))
+def bokeh_corner_plot(dataset, TOOLS=None, hist_color='orange', kde_color="violet"):
+    # if dataset.shape[0] > dataset.shape[1]:
+    #     raise Exception('Shape must be dimensions x samples -- i.e. (9,1000), not (1000,9)')
+
+    if isinstance(dataset, np.ndarray):
+        dataset = DataFrame(dataset)
+
+    if TOOLS is None:
+        TOOLS = "box_select,lasso_select,pan,wheel_zoom,box_zoom,reset,help"
+
+    scatter_plots = []
+    y_max = len(dataset.columns) - 1
+    for i, y_col in enumerate(dataset):
+        for j, x_col in enumerate(dataset):
+            df = DataFrame({x_col: dataset[x_col].tolist(), y_col: dataset[y_col].tolist()})
+            fig = figure(tools=TOOLS, toolbar_location="below", toolbar_sticky=False)
+            if i >= j:
+                if i != j:
+                    fig.scatter(x=x_col, y=y_col, source=df)
+                else:
+                    x_now       = np.sort(dataset[x_col].values)
+                    mu  , sigma = np.mean(x_now), np.std(x_now)
+                    hist, edges = np.histogram(x_now, density=True, bins=len(x_now)//100)
+                    pdf         = 1/(sigma * np.sqrt(2*np.pi)) * np.exp(-0.5*(x_now-mu)**2 / sigma**2)
+                    cdf         = 0.5*(1+special.erf((x_now-mu)/np.sqrt(2*sigma**2)))
+
+                    fig.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],fill_color=hist_color, line_color=hist_color, alpha=1.0)
+                    fig.line(x_now, pdf, line_color=kde_color, line_width=8, alpha=0.7)#, legend="PDF")
+                    #fig.line(x_now, cdf, line_color="black"  , line_width=2, alpha=0.5, legend="CDF")
+                if j > 0:
+                    fig.yaxis.axis_label = ""
+                    fig.yaxis.visible = False
+                if i < y_max:
+                    fig.xaxis.axis_label = ""
+                    fig.xaxis.visible = False
+            else:
+                fig.outline_line_color = None
+
+            scatter_plots.append(fig)
+
+    # xr = scatter_plots[0].x_range
+    # yr = scatter_plots[0].y_range
+    # for p in scatter_plots:
+    #     p.x_range = xr
+    #     p.y_range = yr
+
+    grid = gridplot(scatter_plots, ncols = len(dataset.columns))
+    show(grid)
+    # save(grid)
+
+joblib.dump(res, 'emcee_results.joblib.save')
+# corner_use    = [1, 4,5,]
+res_var_names = np.array(res.var_names)
+res_flatchain = np.array(res.flatchain)
+res_df = DataFrame(res_flatchain, columns=res_var_names)
+# res_flatchain.T[corner_use].shape
+bokeh_corner_plot(res_df)
