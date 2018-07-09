@@ -11,6 +11,7 @@ from functools import partial
 from lmfit import Parameters, Minimizer, report_errors
 from os import environ
 from scipy import spatial 
+from statsmodels.robust import scale
 from time import time
 
 y,x = 0,1
@@ -58,7 +59,6 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
     nearIndices = bliss.nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     
     return times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds
-
 
 def deltaphase_eclipse(ecc, omega):
     return 0.5*( 1 + (4. / pi) * ecc * cos(omega))
@@ -121,6 +121,10 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
                                     yBinSize  = yBinSize
                                  )
     
+    nSig = 10
+    vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
+    sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
+    
     model = model * sensitivity_map
     
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
@@ -158,6 +162,18 @@ def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, 
     
     return output
 
+def exoparams_to_lmfit_params(planet_name):
+    ep_params   = exoparams.PlanetParams(planet_name)
+    iApRs       = ep_params.ar.value
+    iEcc        = ep_params.ecc.value
+    iInc        = ep_params.i.value
+    iPeriod     = ep_params.per.value
+    iTCenter    = ep_params.tt.value
+    iTdepth     = ep_params.depth.value
+    iOmega      = ep_params.om.value
+    
+    return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
+
 ap = argparse.ArgumentParser()
 ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
 ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
@@ -170,18 +186,6 @@ dataDir     = args['filename']
 xBinSize    = float(args['xbinsize'])
 yBinSize    = float(args['ybinsize'])
 planet_name = args['planet_name']
-
-def exoparams_to_lmfit_params(planet_name):
-    ep_params   = exoparams.PlanetParams(planet_name)
-    iApRs       = ep_params.ar.value
-    iEcc        = ep_params.ecc.value
-    iInc        = ep_params.i.value
-    iPeriod     = ep_params.per.value
-    iTCenter    = ep_params.tt.value
-    iTdepth     = ep_params.depth.value
-    iOmega      = ep_params.om.value
-    
-    return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
 if planet_name[:-5] == '.json':
     with open(planet_name, 'r') as file_in:
@@ -199,8 +203,19 @@ else:
 init_fpfs        = 500 / ppm
 init_u1, init_u2 = 0.1, 0.1
 
+# FROM Fraine et al. 2013
+init_t0 = 54966.524918
+init_inc = 88.794
+init_aprs = 15.049
+init_rprs = 0.11710
+init_tdepth = init_rprs**2.
+init_u1 = 0.110
+init_u2 = 0.0
+
+print('Acquiring Data')
 times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
+print('Fixing Time Stamps')
 len_init_t0 = len(str(int(init_t0)))
 len_times = len(str(int(times.mean())))
 
@@ -216,13 +231,14 @@ if len_init_t0 == 7 and len_times != 7:
 # Check if `init_t0` is in MJD or Simplified-MJD
 if len(str(int(init_t0))) > len(str(int(times.mean()))): init_t0 = init_t0 - 50000
 
+print('Initializing Parameters')
 initialParams = Parameters()
 
 # fluxes_std = np.std(fluxes/np.median(fluxes))
 
 initialParams.add_many(
     ('period'   , init_period, False),
-    ('tCenter'  , init_t0    , True , init_t0 - 0.1, init_t0 + 0.1),
+    ('tCenter'  , init_t0    , True  , init_t0 - 0.1, init_t0 + 0.1),
     ('inc'      , init_inc   , False, 80.0, 90.),
     ('aprs'     , init_aprs  , False, 0.0, 100.),
     ('tdepth'   , init_tdepth, True , 0.0, 0.3 ),
@@ -230,7 +246,7 @@ initialParams.add_many(
     ('ecc'      , init_ecc   , False, 0.0, 1.0 ),
     ('omega'    , init_omega , False, 0.0, 1.0 ),
     ('u1'       , init_u1    , True , 0.0, 1.0 ),
-    ('u2'       , init_u2    , True , 0.0, 1.0 ),
+    ('u2'       , init_u2    , True, 0.0, 1.0 ),
     ('intcpt'   , 1.0        , True ),#, 1.0-1e-3 + 1.0+1e-3),
     ('slope'    , 0.0        , True ),
     ('crvtur'   , 0.0        , False))
@@ -248,6 +264,7 @@ partial_residuals  = partial(residuals_func,
                              keep_inds   = keep_inds
                              )
 
+print('Fitting the Model')
 # Setup up the call to minimize the residuals (i.e. ChiSq)
 mle0  = Minimizer(partial_residuals, initialParams)
 
@@ -259,6 +276,7 @@ print("LMFIT operation took {} seconds".format(time()-start))
 
 report_errors(fitResult.params)
 
+print('Establishing the Best Fit Solution')
 bf_model_set = generate_best_fit_solution(fitResult.params, 
                                             times, xcenters, ycenters, fluxes / np.median(fluxes), 
                                             knots, nearIndices, keep_inds, 
@@ -269,28 +287,36 @@ bf_line_model = bf_model_set['line_model']
 bf_transit_model = bf_model_set['transit_model']
 bf_bliss_map = bf_model_set['bliss_map']
 
+nSig = 10
+good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
+
+# print('FINDME:', (fluxes[keep_inds]).mean(),
+#         bf_full_model.mean(), bf_line_model.mean(), bf_transit_model.mean(), bf_bliss_map.mean())
+
+# plt.hist(bf_full_model,bins=bf_full_model.size//10)
+# plt.show()
+
+print('Plotting the Correlations')
 fig1 = plt.figure()
 ax11 = fig1.add_subplot(221)
 ax12 = fig1.add_subplot(222)
 ax21 = fig1.add_subplot(223)
 ax22 = fig1.add_subplot(224)
 
-print('FINDME:', (fluxes[keep_inds]).mean(), 
-        bf_full_model.mean(), bf_line_model.mean(), bf_transit_model.mean(), bf_bliss_map.mean())
+ax11.scatter(xcenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
+ax12.scatter(ycenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
+ax21.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
+                s=0.1, alpha=0.1, c=(bf_bliss_map*bf_line_model)[good_bf])
+ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
+                s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)[good_bf]**2)
 
-ax11.scatter(xcenters[keep_inds], fluxes[keep_inds], s=0.1, alpha=0.1)
-ax12.scatter(ycenters[keep_inds], fluxes[keep_inds], s=0.1, alpha=0.1)
-ax21.scatter(xcenters[keep_inds], ycenters[keep_inds], 
-                s=0.1, alpha=0.1, c=bf_bliss_map*bf_line_model)
-ax22.scatter(xcenters[keep_inds], ycenters[keep_inds], 
-                s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)**2)
+print('Plotting the Time Series')
 
 fig2 = plt.figure()
 ax1 = fig2.add_subplot(211)
 ax2 = fig2.add_subplot(212)
-ax1.scatter(times[keep_inds], fluxes[keep_inds] , s=0.1, alpha=0.1)
-# ax1.scatter(times[keep_inds], bf_bliss_map*bf_line_model, s=0.1, alpha=0.1)
-ax1.scatter(times[keep_inds], bf_full_model, s=0.1, alpha=0.1)
-ax2.scatter(times[keep_inds], (fluxes[keep_inds] - bf_full_model), s=0.1, alpha=0.1)
+ax1.scatter(times[keep_inds][good_bf], fluxes[keep_inds][good_bf] , s=0.1, alpha=0.1)
+ax1.scatter(times[keep_inds][good_bf], bf_full_model[good_bf], s=0.1, alpha=0.1)
+ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_bf], s=0.1, alpha=0.1)
 
 plt.show()
