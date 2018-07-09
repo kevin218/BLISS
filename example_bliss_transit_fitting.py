@@ -385,6 +385,8 @@ mini  = Minimizer(lnprob, mle0.params)
 
 start = time()
 
+# MCMC section adapted from Fitting-Exoplanet-Transits by Jonathan Fraine
+
 res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                     pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
                     is_weighted=True, seed=None)
