@@ -12,6 +12,7 @@ from functools import partial
 from lmfit import Parameters, Minimizer, report_errors
 from os import environ
 from scipy import spatial 
+from sklearn.externals import joblib
 from statsmodels.robust import scale
 from time import time
 
@@ -176,10 +177,12 @@ def exoparams_to_lmfit_params(planet_name):
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
 ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-ap.add_argument('-xb', '--xbinsize'  , type=float, required=False, default=0.1, help='Stepsize in X-sigma to space the knots')
-ap.add_argument('-yb', '--ybinsize'  , type=float, required=False, default=0.1, help='Stepsize in Y-sigma to space the knots')
+ap.add_argument('-f', '--filename'    , type=str  , required=True , default=''  , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-pn', '--planet_name', type=str  , required=True , default=''  , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+ap.add_argument('-xb', '--xbinsize'   , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
+ap.add_argument('-yb', '--ybinsize'   , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
+ap.add_argument('-pl', '--plot2screen', type=bool , required=False, default=True, help='Toggle whether to Plot to Screen or Not')
+ap.add_argument('-sh', '--save_header', type=str  , required=False, default=''  , help='Save name header to save LMFIT joblibe and plots to')
 args = vars(ap.parse_args())
 
 # dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
@@ -187,6 +190,8 @@ dataDir     = args['filename']
 xBinSize    = float(args['xbinsize'])
 yBinSize    = float(args['ybinsize'])
 planet_name = args['planet_name']
+plot_now    = args['plot2screen']
+save_header = args['save_header']
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -295,6 +300,8 @@ fitResult = mle0.leastsq() # Go-Go Gadget Fitting Routine
 
 print("LMFIT operation took {} seconds".format(time()-start))
 
+if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save')
+
 report_errors(fitResult.params)
 
 print('Establishing the Best Fit Solution')
@@ -303,10 +310,10 @@ bf_model_set = generate_best_fit_solution(fitResult.params,
                                             knots, nearIndices, keep_inds, 
                                             xBinSize  = xBinSize, yBinSize  = yBinSize)
 
-bf_full_model = bf_model_set['full_model']
-bf_line_model = bf_model_set['line_model']
+bf_full_model    = bf_model_set['full_model']
+bf_line_model    = bf_model_set['line_model']
 bf_transit_model = bf_model_set['transit_model']
-bf_bliss_map = bf_model_set['bliss_map']
+bf_bliss_map    = bf_model_set['bliss_map']
 
 nSig = 10
 good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
@@ -370,4 +377,8 @@ mng = plt.get_current_fig_manager()
 mng.window.showMaximized()
 # plt.tight_layout()
 
-plt.show()
+if plot_now: plt.show()
+
+if save_header is not '': 
+    fig1.savefig('{}_fig1_BLISS_Correlations_Plots_with_LMFIT.png'.format(save_header))
+    fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
