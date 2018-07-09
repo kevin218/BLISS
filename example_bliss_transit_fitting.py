@@ -384,14 +384,13 @@ def lnprob(p):
 mini  = Minimizer(lnprob, mle0.params)
 
 start = time()
-
+# ************************************************************************
 # MCMC section adapted from Fitting-Exoplanet-Transits by Jonathan Fraine
 
 res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                     pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
                     is_weighted=True, seed=None)
 
-#
 print("MCMC operation took {} seconds".format(time()-start))
 def bokeh_corner_plot(dataset, TOOLS=None, hist_color='orange', kde_color="violet"):
     # if dataset.shape[0] > dataset.shape[1]:
@@ -433,20 +432,11 @@ def bokeh_corner_plot(dataset, TOOLS=None, hist_color='orange', kde_color="viole
 
             scatter_plots.append(fig)
 
-    # xr = scatter_plots[0].x_range
-    # yr = scatter_plots[0].y_range
-    # for p in scatter_plots:
-    #     p.x_range = xr
-    #     p.y_range = yr
-
     grid = gridplot(scatter_plots, ncols = len(dataset.columns))
     show(grid)
-    # save(grid)
 
 joblib.dump(res, 'emcee_results.joblib.save')
-# corner_use    = [1, 4,5,]
 res_var_names = np.array(res.var_names)
 res_flatchain = np.array(res.flatchain)
 res_df = DataFrame(res_flatchain, columns=res_var_names)
-# res_flatchain.T[corner_use].shape
 bokeh_corner_plot(res_df)
