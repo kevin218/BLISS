@@ -4,6 +4,7 @@ import argparse
 import batman
 import BLISS as bliss
 import exoparams
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -187,7 +188,9 @@ xBinSize    = float(args['xbinsize'])
 yBinSize    = float(args['ybinsize'])
 planet_name = args['planet_name']
 
-if planet_name[:-5] == '.json':
+init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
+
+if planet_name[-5:] == '.json':
     with open(planet_name, 'r') as file_in:
         planet_json = json.load(file_in)
     init_period = planet_json['period']
@@ -195,22 +198,21 @@ if planet_name[:-5] == '.json':
     init_aprs   = planet_json['aprs']
     init_inc    = planet_json['inc']
     init_tdepth = planet_json['tdepth']
+    init_fpfs   = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
     init_ecc    = planet_json['ecc']
     init_omega  = planet_json['omega']
+    init_u1     = planet_json['u1'] if 'u1' in planet_json.keys() else None
+    init_u2     = planet_json['u2'] if 'u2' in planet_json.keys() else None
+    init_u3     = planet_json['u3'] if 'u3' in planet_json.keys() else None
+    init_u4     = planet_json['u4'] if 'u4' in planet_json.keys() else None
 else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
-
-init_fpfs        = 500 / ppm
-init_u1, init_u2 = 0.1, 0.1
-
-# FROM Fraine et al. 2013
-init_t0 = 54966.524918
-init_inc = 88.794
-init_aprs = 15.049
-init_rprs = 0.11710
-init_tdepth = init_rprs**2.
-init_u1 = 0.110
-init_u2 = 0.0
+        
+init_fpfs = 500 / ppm if init_fpfs is None else init_fpfs
+init_u1   = 0.1 if init_u1 is None else init_u1
+init_u2   = 0.0 if init_u2 is None else init_u2
+init_u3   = 0.0 if init_u3 is None else init_u3
+init_u4   = 0.0 if init_u4 is None else init_u4
 
 print('Acquiring Data')
 times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
