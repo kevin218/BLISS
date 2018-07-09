@@ -1,6 +1,5 @@
-# EXAMPLE USAGE: python example_bliss_transit_fitting.py -f ../../data/group0_gsc.joblib.save -p 'GJ 1214 b'
 from scipy import special
-
+import corner
 import argparse
 import batman
 import BLISS as bliss
@@ -22,7 +21,9 @@ from bokeh.layouts  import gridplot
 from pandas import DataFrame
 y,x = 0,1
 ppm = 1e6
-
+import matplotlib
+matplotlib.rc('xtick', labelsize=5)
+matplotlib.rc('ytick', labelsize=10)
 def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
                                  xSigmaRange=4, ySigmaRange=4, fSigmaRange=4):
     """This function takes in the filename of the data (stored with sklearn-joblib),
@@ -333,8 +334,8 @@ ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
 
 ax11.set_title('Xcenters vs Normalized Flux')
 ax21.set_title('Ycenters vs Normalized Flux')
-ax12.set_title('X\&Y Centers vs Bliss Map')
-ax22.set_title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
+ax12.set_title('X,Y Centers vs Bliss Map')
+ax22.set_title('X,Y Centers vs Residuals (Flux - Bliss Map)')
 
 nSig = 3
 xCtr = xcenters[keep_inds][good_bf].mean()
@@ -384,59 +385,24 @@ def lnprob(p):
 mini  = Minimizer(lnprob, mle0.params)
 
 start = time()
-# ************************************************************************
-# MCMC section adapted from Fitting-Exoplanet-Transits by Jonathan Fraine
 
 res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                     pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
                     is_weighted=True, seed=None)
 
+#
 print("MCMC operation took {} seconds".format(time()-start))
-def bokeh_corner_plot(dataset, TOOLS=None, hist_color='orange', kde_color="violet"):
-    # if dataset.shape[0] > dataset.shape[1]:
-    #     raise Exception('Shape must be dimensions x samples -- i.e. (9,1000), not (1000,9)')
 
-    if isinstance(dataset, np.ndarray):
-        dataset = DataFrame(dataset)
-
-    if TOOLS is None:
-        TOOLS = "box_select,lasso_select,pan,wheel_zoom,box_zoom,reset,help"
-
-    scatter_plots = []
-    y_max = len(dataset.columns) - 1
-    for i, y_col in enumerate(dataset):
-        for j, x_col in enumerate(dataset):
-            df = DataFrame({x_col: dataset[x_col].tolist(), y_col: dataset[y_col].tolist()})
-            fig = figure(tools=TOOLS, toolbar_location="below", toolbar_sticky=False)
-            if i >= j:
-                if i != j:
-                    fig.scatter(x=x_col, y=y_col, source=df)
-                else:
-                    x_now       = np.sort(dataset[x_col].values)
-                    mu  , sigma = np.mean(x_now), np.std(x_now)
-                    hist, edges = np.histogram(x_now, density=True, bins=len(x_now)//100)
-                    pdf         = 1/(sigma * np.sqrt(2*np.pi)) * np.exp(-0.5*(x_now-mu)**2 / sigma**2)
-                    cdf         = 0.5*(1+special.erf((x_now-mu)/np.sqrt(2*sigma**2)))
-
-                    fig.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],fill_color=hist_color, line_color=hist_color, alpha=1.0)
-                    fig.line(x_now, pdf, line_color=kde_color, line_width=8, alpha=0.7)#, legend="PDF")
-                    #fig.line(x_now, cdf, line_color="black"  , line_width=2, alpha=0.5, legend="CDF")
-                if j > 0:
-                    fig.yaxis.axis_label = ""
-                    fig.yaxis.visible = False
-                if i < y_max:
-                    fig.xaxis.axis_label = ""
-                    fig.xaxis.visible = False
-            else:
-                fig.outline_line_color = None
-
-            scatter_plots.append(fig)
-
-    grid = gridplot(scatter_plots, ncols = len(dataset.columns))
-    show(grid)
-
-joblib.dump(res, 'emcee_results.joblib.save')
+joblib.dump(res,'emcee'+dataDir[23:29]+'.joblib.save')
+# corner_use    = [1, 4,5,]
 res_var_names = np.array(res.var_names)
 res_flatchain = np.array(res.flatchain)
 res_df = DataFrame(res_flatchain, columns=res_var_names)
-bokeh_corner_plot(res_df)
+res_df = res_df.drop(['u2','slope'], axis=1)
+print(res_df)
+# res_flatchain.T[corner_use].shape
+corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, smooth=True, bins=30)
+
+corner.corner(res_df, color='darkblue', **corner_kw, range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),(0.996,1.002), (0.998,1.003)], plot_density=False, fill_contours=True)
+plt.savefig('corner'+dataDir[23:29])
+plt.show()
