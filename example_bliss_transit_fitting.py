@@ -242,6 +242,14 @@ init_u4   = 0.0 if init_u4 is None else init_u4
 print('Acquiring Data')
 times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
+phase = ((times-init_t0)%init_period)/init_period
+ph_where = np.where(phase>0.5)[0]
+phase[ph_where] -= 1
+
+
+
+
+
 print('Fixing Time Stamps')
 len_init_t0 = len(str(int(init_t0)))
 len_times = len(str(int(times.mean())))
@@ -353,7 +361,7 @@ ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
 
 mng = plt.get_current_fig_manager()
 # plt.tight_layout()
-plt.savefig('correlations'+dataDir[35:41])
+plt.savefig('correlations'+dataDir[35:54])
 
 print('Plotting the Time Series')
 
@@ -366,25 +374,35 @@ ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_
 
 ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format(planet_name))
 ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
-plt.savefig('timeseries'+dataDir[35:41])
+plt.savefig('timeseries'+dataDir[35:54])
 
 mng = plt.get_current_fig_manager()
 # plt.tight_layout()
 print(dataDir)
 mle0.params.add('f', value=1, min=0.001, max=2)
 
+def logprior_func(p):
+    return 0
+
 def lnprob(p):
+    logprior = logprior_func(p)
+    if not np.isfinite(logprior):
+        return -np.inf
+    
     resid = partial_residuals(p)
     s = p['f']
     resid *= 1 / s
     resid *= resid
     resid += np.log(2 * np.pi * s**2)
-    return -0.5 * np.sum(resid)
+    return -0.5 * np.sum(resid) + logprior
 
 
 mini  = Minimizer(lnprob, mle0.params)
 
 start = time()
+
+#import emcee
+#res = emcee.sampler(lnlikelihood = lnprob, lnprior=logprior_func)
 
 res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                     pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
@@ -393,7 +411,7 @@ res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10,
 #
 print("MCMC operation took {} seconds".format(time()-start))
 
-joblib.dump(res,'emcee'+dataDir[35:41]+'.joblib.save')
+joblib.dump(res,'emcee'+dataDir[35:54]+'.joblib.save')
 # corner_use    = [1, 4,5,]
 res_var_names = np.array(res.var_names)
 res_flatchain = np.array(res.flatchain)
@@ -404,4 +422,4 @@ print(res_df)
 corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, smooth=True, bins=30)
 
 corner.corner(res_df, color='darkblue', **corner_kw, range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),(0.996,1.002), (0.998,1.003)], plot_density=False, fill_contours=True)
-plt.savefig('corner'+dataDir[35:41])
+plt.savefig('corner'+dataDir[35:54])
