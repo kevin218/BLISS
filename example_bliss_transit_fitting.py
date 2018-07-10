@@ -206,7 +206,7 @@ ap.add_argument('-pn', '--planet_name'  , type=str  , required=True , default=''
 ap.add_argument('-xb', '--xbinsize'     , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
 ap.add_argument('-yb', '--ybinsize'     , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
 ap.add_argument('-pl', '--plot2screen'  , type=bool , required=False, default=True, help='Toggle whether to Plot to Screen or Not')
-ap.add_argument('-sh', '--save_header'  , type=str  , required=False, default=''  , help='Save name header to save LMFIT joblibe and plots to')
+ap.add_argument('-sh', '--save_header'  , type=str  , required=False, default='rename_me_', help='Save name header to save LMFIT joblibe and plots to; set to `None` to dis saving')
 ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
 ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
 
@@ -330,7 +330,7 @@ if run_lmfit_now:
 
     print("LMFIT operation took {} seconds".format(time()-start))
 
-    if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save')
+    if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save'.format(save_header))
     
     report_errors(fitResult.params)
 else:
@@ -412,10 +412,9 @@ if plot_now or save_header is not '':
     
     if plot_now: plt.show()
     
-    if save_header is not '': 
+    if save_header is not 'None': 
         fig1.savefig('{}_fig1_BLISS_Correlations_Plots_with_LMFIT.png'.format(save_header))
         fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
-
 
 if run_mcmc_now:
     # Run MCMC 
@@ -447,19 +446,25 @@ if run_mcmc_now:
     res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                         pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
                         is_weighted=True, seed=None)
-
-    #
+    
     print("MCMC operation took {} seconds".format(time()-start))
-
-    joblib.dump(res,'emcee'+dataDir[35:54]+'.joblib.save')
-    # corner_use    = [1, 4,5,]
+    emcee_save_name = 'emcee'+dataDir[35:54]+'.joblib.save'
+    print("Saving EMCEE results to {}".format(emcee_save_name))
+    joblib.dump(res,emcee_save_name)
+    
     res_var_names = np.array(res.var_names)
     res_flatchain = np.array(res.flatchain)
     res_df = DataFrame(res_flatchain, columns=res_var_names)
     res_df = res_df.drop(['u2','slope'], axis=1)
     print(res_df)
-    # res_flatchain.T[corner_use].shape
-    corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, smooth=True, bins=30)
-
-    corner.corner(res_df, color='darkblue', **corner_kw, range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),(0.996,1.002), (0.998,1.003)], plot_density=False, fill_contours=True)
-    plt.savefig('corner'+dataDir[35:54])
+    
+    corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, 
+                        smooth=True, smooth1d=True, bins=100, 
+                        range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),\
+                                    (0.996,1.002), (0.998,1.003)], 
+                        plot_density=False, fill_contours=True, color='darkblue')
+    
+    corner.corner(res_df, **corner_kw)
+    corner_save_name = 'corner'+dataDir[35:54]
+    print('Saving MCMC Corner Plot to '.format(corner_save_name))
+    plt.savefig(corner_save_name)
