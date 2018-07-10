@@ -3,20 +3,22 @@ from sklearn.externals import joblib
 from pylab import *;
 
 y, x = 0, 1
-# dict_keys([b'noise', b'transit', b'filenames', b'radii', b'phots', b'counts', b'skybg',
-# b'centers', b'times', b'widths', b'heights', b'stat_decor'])
-
 def extractData(file):
     group = joblib.load(file)
-    times = group[b'times'].flatten()
-    xcenters = group[b'centers'][0, :, :, x].flatten()
-    ycenters = group[b'centers'][0, :, :, y].flatten()
-    fluxes = group[b'phots'][0, -1].flatten()
-    flux_errs = sqrt(fluxes) / np.median(fluxes)
+    times = group['times'].flatten()
+    xcenters = group['xcenters'].flatten()
+    ycenters = group['ycenters'].flatten()
+    fluxes = group['phots'][0, -1].flatten() # -1: Variable Aperture with Beta Pixels
+    
+    if 'noise' in group.keys():
+        flux_errs = group[0,-1].flatten() / np.median(fluxes)
+    else:
+        flux_errs = sqrt(fluxes) / np.median(fluxes)
+    
     fluxes = fluxes / np.median(fluxes)
     return times, xcenters, ycenters, fluxes, flux_errs
 
-def nearest(xc,yc, neighbors, tree):
+def nearest(xc, yc, neighbors, tree):
     """
     Args:
     point (list): list of x, y coordinates of a single center.
