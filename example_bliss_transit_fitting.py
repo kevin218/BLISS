@@ -123,9 +123,33 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
                                     yBinSize  = yBinSize
                                  )
     
+    # Identify when something very weird happens, and the sensitivity_map fails
+    #   This may be related to the outlier points that use KNN instead of interpolation
+    #   We will mitigate these outliers by replacing them as the mean of their neighbours
+    #       or the closest neighbour, in the corner cases
     nSig = 10
     vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
+    
+    # Corner Cases that Cause Faults with Average Replacement
+    if len(sensitivity_map)-1 in vbad_sm:
+    	vbad_sm = list(set(vbad_sm) - set(len(sensitivity_map)))
+    	end_corner_case = True
+    else:
+    	end_corner_case = False
+    
+    if 0 in vbad_sm:
+    	vbad_sm = list(set(vbad_sm) - set([0]))
+    	start_corner_case = True
+    else:
+    	start_corner_case = False
+
+    # Default outlier mitigation
     sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
+    
+    # Address outliers at the start and end of the array
+    #   This is equivalent to the "nearest neighbour" interpolation
+    if end_corner_case: sensitivity_map[-1] = sensitivity_map[2]
+    if start_corner_case: sensitivity_map[0] = sensitivity_map[1]
     
     model = model * sensitivity_map
     
