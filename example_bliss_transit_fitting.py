@@ -313,7 +313,7 @@ bf_full_model = bf_model_set['full_model']
 bf_line_model = bf_model_set['line_model']
 bf_transit_model = bf_model_set['transit_model']
 bf_bliss_map = bf_model_set['bliss_map']
-
+print(planet_json['planet name'])
 nSig = 10
 good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
 
@@ -353,6 +353,7 @@ ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
 
 mng = plt.get_current_fig_manager()
 # plt.tight_layout()
+plt.savefig('correlations'+dataDir[35:41])
 
 print('Plotting the Time Series')
 
@@ -365,12 +366,11 @@ ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_
 
 ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format(planet_name))
 ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
+plt.savefig('timeseries'+dataDir[35:41])
 
 mng = plt.get_current_fig_manager()
 # plt.tight_layout()
-
-plt.show()
-
+print(dataDir)
 mle0.params.add('f', value=1, min=0.001, max=2)
 
 def lnprob(p):
@@ -393,7 +393,7 @@ res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10,
 #
 print("MCMC operation took {} seconds".format(time()-start))
 
-joblib.dump(res,'emcee'+dataDir[23:29]+'.joblib.save')
+joblib.dump(res,'emcee'+dataDir[35:41]+'.joblib.save')
 # corner_use    = [1, 4,5,]
 res_var_names = np.array(res.var_names)
 res_flatchain = np.array(res.flatchain)
@@ -404,5 +404,4 @@ print(res_df)
 corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, smooth=True, bins=30)
 
 corner.corner(res_df, color='darkblue', **corner_kw, range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),(0.996,1.002), (0.998,1.003)], plot_density=False, fill_contours=True)
-plt.savefig('corner'+dataDir[23:29])
-plt.show()
+plt.savefig('corner'+dataDir[35:41])
