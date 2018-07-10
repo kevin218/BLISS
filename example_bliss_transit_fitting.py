@@ -132,13 +132,13 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     
     # Corner Cases that Cause Faults with Average Replacement
     if len(sensitivity_map)-1 in vbad_sm:
-    	vbad_sm = list(set(vbad_sm) - set(len(sensitivity_map)))
+    	vbad_sm = np.array(list(set(vbad_sm) - set(len(sensitivity_map))))
     	end_corner_case = True
     else:
     	end_corner_case = False
     
     if 0 in vbad_sm:
-    	vbad_sm = list(set(vbad_sm) - set([0]))
+    	vbad_sm = np.array(list(set(vbad_sm) - set([0])))
     	start_corner_case = True
     else:
     	start_corner_case = False
@@ -205,7 +205,7 @@ ap.add_argument('-f', '--filename'      , type=str  , required=True , default=''
 ap.add_argument('-pn', '--planet_name'  , type=str  , required=True , default=''  , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
 ap.add_argument('-xb', '--xbinsize'     , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
 ap.add_argument('-yb', '--ybinsize'     , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
-ap.add_argument('-pl', '--plot2screen'  , type=bool , required=False, default=True, help='Toggle whether to Plot to Screen or Not')
+ap.add_argument('-pl', '--plot2screen'  , type=bool , required=False, default=False, help='Toggle whether to Plot to Screen or Not')
 ap.add_argument('-sh', '--save_header'  , type=str  , required=False, default='rename_me_', help='Save name header to save LMFIT joblibe and plots to; set to `None` to dis saving')
 ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
 ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
@@ -417,8 +417,8 @@ if plot_now or save_header is not '':
         fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
 
 if run_mcmc_now:
-    # Run MCMC 
-
+    print("MCMC Sampling the Posterior Space")
+    
     mle0.params.add('f', value=1, min=0.001, max=2)
     
     def logprior_func(p):
