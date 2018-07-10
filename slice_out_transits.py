@@ -159,7 +159,7 @@ if len(ph_where_transits) == len(ph_transits)-1 or ph_where_transits == []:
     print('\tWe will store *only* the phase range equivalent to that single transit')
     ph_where_transits = [len(ph_transits)-1]
     single_transit = True
-
+ib
 ntransits = len(ph_where_transits)
 
 idx_start = ph_transits[0]

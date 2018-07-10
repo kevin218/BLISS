@@ -11,11 +11,12 @@ def extractData(file):
     fluxes = group['phots'][0, -1].flatten() # -1: Variable Aperture with Beta Pixels
     
     if 'noise' in group.keys():
-        flux_errs = group[0,-1].flatten() / np.median(fluxes)
+        flux_errs = group['noise'][0,-1].flatten() / np.median(fluxes)
     else:
         flux_errs = sqrt(fluxes) / np.median(fluxes)
     
     fluxes = fluxes / np.median(fluxes)
+    
     return times, xcenters, ycenters, fluxes, flux_errs
 
 def nearest(xc, yc, neighbors, tree):
