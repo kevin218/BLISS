@@ -65,17 +65,17 @@ def exoparams_to_lmfit_params(planet_name):
 
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
-try:
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-    ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-    args = vars(ap.parse_args())
-    
-    dataDir     = args['filename']
-    planet_name = args['planet_name']
-except:
-    dataDir     = '../../data/group{}_gsc.joblib.save'.format(0)
-    planet_name = 'gj1214b_planet_params.json'
+# try:
+ap = argparse.ArgumentParser()
+ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+args = vars(ap.parse_args())
+
+dataDir     = args['filename']
+planet_name = args['planet_name']
+# except:
+#     dataDir     = '../../data/group{}_gsc.joblib.save'.format(0)
+#     planet_name = 'gj1214b_planet_params.json'
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -149,7 +149,7 @@ ph_transits   = np.where(abs(phase)<transit_phase)[0]
 
 ph_diff_times = np.diff(times[ph_transits]*86400)
 med_ph_diff_times = np.median(ph_diff_times)
-std_ph_diff_times = std(ph_diff_times)
+std_ph_diff_times = np.std(ph_diff_times)
 
 nSig = 10
 ph_where_transits = np.where(abs(ph_diff_times) > nSig*std_ph_diff_times)[0]
@@ -159,7 +159,6 @@ ntransits = len(ph_where_transits)
 idx_start = ph_transits[0]
 for kt in range(ntransits):
     idx_end = ph_transits[ph_where_transits[kt]]
-    print(kt,idx_start, idx_end)
     current_transit = {}
     current_transit['times'] = times[idx_start:idx_end]
     current_transit['xcenters'] = xcenters[idx_start:idx_end]
