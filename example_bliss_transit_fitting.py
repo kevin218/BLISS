@@ -177,21 +177,26 @@ def exoparams_to_lmfit_params(planet_name):
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
 ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename'    , type=str  , required=True , default=''  , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-pn', '--planet_name', type=str  , required=True , default=''  , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-ap.add_argument('-xb', '--xbinsize'   , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
-ap.add_argument('-yb', '--ybinsize'   , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
-ap.add_argument('-pl', '--plot2screen', type=bool , required=False, default=True, help='Toggle whether to Plot to Screen or Not')
-ap.add_argument('-sh', '--save_header', type=str  , required=False, default=''  , help='Save name header to save LMFIT joblibe and plots to')
+ap.add_argument('-f', '--filename'      , type=str  , required=True , default=''  , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-pn', '--planet_name'  , type=str  , required=True , default=''  , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+ap.add_argument('-xb', '--xbinsize'     , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
+ap.add_argument('-yb', '--ybinsize'     , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
+ap.add_argument('-pl', '--plot2screen'  , type=bool , required=False, default=True, help='Toggle whether to Plot to Screen or Not')
+ap.add_argument('-sh', '--save_header'  , type=str  , required=False, default=''  , help='Save name header to save LMFIT joblibe and plots to')
+ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
+ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
+
 args = vars(ap.parse_args())
 
 # dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
-dataDir     = args['filename']
-xBinSize    = float(args['xbinsize'])
-yBinSize    = float(args['ybinsize'])
-planet_name = args['planet_name']
-plot_now    = args['plot2screen']
-save_header = args['save_header']
+dataDir       = args['filename']
+xBinSize      = args['xbinsize']
+yBinSize      = args['ybinsize']
+planet_name   = args['planet_name']
+plot_now      = args['plot2screen']
+save_header   = args['save_header']
+run_mcmc_now  = args['run_mcmc_now']
+run_lmfit_now = args['run_lmfit_now']
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -290,19 +295,22 @@ partial_residuals  = partial(residuals_func,
                              keep_inds   = keep_inds
                              )
 
-print('Fitting the Model')
-# Setup up the call to minimize the residuals (i.e. ChiSq)
-mle0  = Minimizer(partial_residuals, initialParams)
+if run_lmfit_now:
+    print('LM-Fitting the Model')
+    # Setup up the call to minimize the residuals (i.e. ChiSq)
+    mle0  = Minimizer(partial_residuals, initialParams)
 
-start = time()
+    start = time()
 
-fitResult = mle0.leastsq() # Go-Go Gadget Fitting Routine
+    fitResult = mle0.leastsq() # Go-Go Gadget Fitting Routine
 
-print("LMFIT operation took {} seconds".format(time()-start))
+    print("LMFIT operation took {} seconds".format(time()-start))
 
-if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save')
-
-report_errors(fitResult.params)
+    if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save')
+    
+    report_errors(fitResult.params)
+else:
+    fitResult.params = initialParams
 
 print('Establishing the Best Fit Solution')
 bf_model_set = generate_best_fit_solution(fitResult.params, 
@@ -313,7 +321,7 @@ bf_model_set = generate_best_fit_solution(fitResult.params,
 bf_full_model    = bf_model_set['full_model']
 bf_line_model    = bf_model_set['line_model']
 bf_transit_model = bf_model_set['transit_model']
-bf_bliss_map    = bf_model_set['bliss_map']
+bf_bliss_map     = bf_model_set['bliss_map']
 
 nSig = 10
 good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
@@ -324,61 +332,110 @@ good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.ma
 # plt.hist(bf_full_model,bins=bf_full_model.size//10)
 # plt.show()
 
-print('Plotting the Correlations')
-fig1 = plt.figure()
-ax11 = fig1.add_subplot(221)
-ax12 = fig1.add_subplot(222)
-ax21 = fig1.add_subplot(223)
-ax22 = fig1.add_subplot(224)
+if plot_now or save_header is not '':
+    print('Plotting the Correlations')
+    fig1 = plt.figure()
+    ax11 = fig1.add_subplot(221)
+    ax12 = fig1.add_subplot(222)
+    ax21 = fig1.add_subplot(223)
+    ax22 = fig1.add_subplot(224)
 
-ax11.scatter(xcenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
-ax12.scatter(ycenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
-ax21.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
-                s=0.1, alpha=0.1, c=(bf_bliss_map*bf_line_model)[good_bf])
-ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
-                s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)[good_bf]**2)
+    ax11.scatter(xcenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
+    ax12.scatter(ycenters[keep_inds][good_bf], fluxes[keep_inds][good_bf], s=0.1, alpha=0.1)
+    ax21.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
+                    s=0.1, alpha=0.1, c=(bf_bliss_map*bf_line_model)[good_bf])
+    ax22.scatter(xcenters[keep_inds][good_bf], ycenters[keep_inds][good_bf],
+                    s=0.1, alpha=0.1, c=(fluxes[keep_inds]-bf_full_model)[good_bf]**2)
 
-ax11.set_title('Xcenters vs Normalized Flux')
-ax21.set_title('Ycenters vs Normalized Flux')
-ax12.set_title('X\&Y Centers vs Bliss Map')
-ax22.set_title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
+    ax11.set_title('Xcenters vs Normalized Flux')
+    ax21.set_title('Ycenters vs Normalized Flux')
+    ax12.set_title('X\&Y Centers vs Bliss Map')
+    ax22.set_title('X\&Y Centers vs Residuals (Flux - Bliss Map)')
 
-nSig = 3
-xCtr = xcenters[keep_inds][good_bf].mean()
-xSig = xcenters[keep_inds][good_bf].std()
+    nSig = 3
+    xCtr = xcenters[keep_inds][good_bf].mean()
+    xSig = xcenters[keep_inds][good_bf].std()
 
-yCtr = ycenters[keep_inds][good_bf].mean()
-ySig = ycenters[keep_inds][good_bf].std()
+    yCtr = ycenters[keep_inds][good_bf].mean()
+    ySig = ycenters[keep_inds][good_bf].std()
 
-ax11.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
-ax12.set_xlim(yCtr - nSig * ySig, yCtr + nSig * ySig)
-ax21.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
-ax21.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
-ax22.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
-ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+    ax11.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+    ax12.set_xlim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+    ax21.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+    ax21.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
+    ax22.set_xlim(xCtr - nSig * xSig, xCtr + nSig * xSig)
+    ax22.set_ylim(yCtr - nSig * ySig, yCtr + nSig * ySig)
 
-mng = plt.get_current_fig_manager()
-mng.window.showMaximized()
-# plt.tight_layout()
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+    # plt.tight_layout()
 
-print('Plotting the Time Series')
+    print('Plotting the Time Series')
 
-fig2 = plt.figure()
-ax1 = fig2.add_subplot(211)
-ax2 = fig2.add_subplot(212)
-ax1.scatter(times[keep_inds][good_bf], fluxes[keep_inds][good_bf] , s=0.1, alpha=0.1)
-ax1.scatter(times[keep_inds][good_bf], bf_full_model[good_bf], s=0.1, alpha=0.1)
-ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_bf], s=0.1, alpha=0.1)
+    fig2 = plt.figure()
+    ax1 = fig2.add_subplot(211)
+    ax2 = fig2.add_subplot(212)
+    ax1.scatter(times[keep_inds][good_bf], fluxes[keep_inds][good_bf] , s=0.1, alpha=0.1)
+    ax1.scatter(times[keep_inds][good_bf], bf_full_model[good_bf], s=0.1, alpha=0.1)
+    ax2.scatter(times[keep_inds][good_bf], (fluxes[keep_inds] - bf_full_model)[good_bf], s=0.1, alpha=0.1)
 
-ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format(planet_name))
-ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
+    ax1.set_title('{} Raw CH2 Light Curve with BLISS + Linear + BATMAN Model'.format(planet_name))
+    ax2.set_title('{} Raw CH2 Residuals (blue - orange above)'.format(planet_name))
 
-mng = plt.get_current_fig_manager()
-mng.window.showMaximized()
-# plt.tight_layout()
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+    # plt.tight_layout()
+    
+    if plot_now: plt.show()
+    
+    if save_header is not '': 
+        fig1.savefig('{}_fig1_BLISS_Correlations_Plots_with_LMFIT.png'.format(save_header))
+        fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
 
-if plot_now: plt.show()
 
-if save_header is not '': 
-    fig1.savefig('{}_fig1_BLISS_Correlations_Plots_with_LMFIT.png'.format(save_header))
-    fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
+if run_mcmc_now:
+    # Run MCMC 
+
+    mle0.params.add('f', value=1, min=0.001, max=2)
+    
+    def logprior_func(p):
+        return 0
+    
+    def lnprob(p):
+        logprior = logprior_func(p)
+        if not np.isfinite(logprior):
+            return -np.inf
+        
+        resid = partial_residuals(p)
+        s = p['f']
+        resid *= 1 / s
+        resid *= resid
+        resid += np.log(2 * np.pi * s**2)
+        return -0.5 * np.sum(resid) + logprior
+    
+    mini  = Minimizer(lnprob, mle0.params)
+    
+    start = time()
+    
+    #import emcee
+    #res = emcee.sampler(lnlikelihood = lnprob, lnprior=logprior_func)
+
+    res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
+                        pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
+                        is_weighted=True, seed=None)
+
+    #
+    print("MCMC operation took {} seconds".format(time()-start))
+
+    joblib.dump(res,'emcee'+dataDir[35:54]+'.joblib.save')
+    # corner_use    = [1, 4,5,]
+    res_var_names = np.array(res.var_names)
+    res_flatchain = np.array(res.flatchain)
+    res_df = DataFrame(res_flatchain, columns=res_var_names)
+    res_df = res_df.drop(['u2','slope'], axis=1)
+    print(res_df)
+    # res_flatchain.T[corner_use].shape
+    corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, smooth=True, bins=30)
+
+    corner.corner(res_df, color='darkblue', **corner_kw, range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),(0.996,1.002), (0.998,1.003)], plot_density=False, fill_contours=True)
+    plt.savefig('corner'+dataDir[35:54])
