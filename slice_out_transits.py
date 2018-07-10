@@ -65,17 +65,17 @@ def exoparams_to_lmfit_params(planet_name):
 
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
-# try:
-ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-args = vars(ap.parse_args())
+try:
+    ap = argparse.ArgumentParser()
+    ap.add_argument('-f', '--filename'   , type=str  , required=True , default='' , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+    ap.add_argument('-p', '--planet_name', type=str  , required=True , default='' , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+    args = vars(ap.parse_args())
 
-dataDir     = args['filename']
-planet_name = args['planet_name']
-# except:
-#     dataDir     = '../../data/group{}_gsc.joblib.save'.format(0)
-#     planet_name = 'gj1214b_planet_params.json'
+    dataDir     = args['filename']
+    planet_name = args['planet_name']
+except:
+    dataDir     = '../../data/group{}_gsc.joblib.save'.format(4)
+    planet_name = 'gj1214b_planet_params.json'
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -154,6 +154,12 @@ std_ph_diff_times = np.std(ph_diff_times)
 nSig = 10
 ph_where_transits = np.where(abs(ph_diff_times) > nSig*std_ph_diff_times)[0]
 
+if len(ph_where_transits) == len(ph_transits)-1 or ph_where_transits == []:
+    print('There is probably only 1 transit in this data set')
+    print('\tWe will store *only* the phase range equivalent to that single transit')
+    ph_where_transits = [len(ph_transits)-1]
+    single_transit = True
+
 ntransits = len(ph_where_transits)
 
 idx_start = ph_transits[0]
@@ -169,17 +175,27 @@ for kt in range(ntransits):
     
     print("Saving transit{} to {}".format(kt, curr_name))
     joblib.dump(current_transit, curr_name)
-    idx_start = ph_transits[ph_where_transits[0]+1]
+    if not single_transit and idx_end != len(ph_transits)-1:
+        idx_start = ph_transits[ph_where_transits[kt]+1]
+    else:
+        # CORNER CASE
+        error_messages = {True:"There is probably only one transits in this data",
+                          False:"The transit probably meets the end of the data"}
+        
+        print(error_messages[single_transit])
+        
+        ph_transits[-1]
 
-'''Catch the last transit'''
-kt = kt+1 #
-idx_end = ph_transits[-1]
-current_transit = {}
-current_transit['times'] = times[idx_start:idx_end]
-current_transit['xcenters'] = xcenters[idx_start:idx_end]
-current_transit['ycenters'] = ycenters[idx_start:idx_end]
-current_transit['flux'] = fluxes[idx_start:idx_end]
+if not single_transit and idx_start != len(ph_transits)-1:
+    '''Catch the last transit'''
+    kt = kt+1 #
+    idx_end = ph_transits[-1]
+    current_transit = {}
+    current_transit['times'] = times[idx_start:idx_end]
+    current_transit['xcenters'] = xcenters[idx_start:idx_end]
+    current_transit['ycenters'] = ycenters[idx_start:idx_end]
+    current_transit['flux'] = fluxes[idx_start:idx_end]
 
-curr_name = dataDir.replace('_gsc.joblib.save', '_gsc_transit{}.joblib.save'.format(kt))
-print("Saving transit{} to {}".format(kt, curr_name))
-joblib.dump(current_transit, curr_name)
+    curr_name = dataDir.replace('_gsc.joblib.save', '_gsc_transit{}.joblib.save'.format(kt))
+    print("Saving transit{} to {}".format(kt, curr_name))
+    joblib.dump(current_transit, curr_name)
