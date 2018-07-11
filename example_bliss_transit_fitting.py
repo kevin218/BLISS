@@ -451,7 +451,7 @@ if run_mcmc_now:
                         is_weighted=True, seed=None)
     
     print("MCMC operation took {} seconds".format(time()-start))
-    emcee_save_name = 'emcee'+dataDir[35:54]+'.joblib.save'
+    emcee_save_name = save_header + 'emcee_sample_results.joblib.save'
     print("Saving EMCEE results to {}".format(emcee_save_name))
     joblib.dump(res,emcee_save_name)
     
@@ -468,6 +468,7 @@ if run_mcmc_now:
                         plot_density=False, fill_contours=True, color='darkblue')
     
     corner.corner(res_df, **corner_kw)
-    corner_save_name = 'corner'+dataDir[35:54] + '.png'
+    
+    corner_save_name = save_header + 'mcmc_corner_plot.png'
     print('Saving MCMC Corner Plot to '.format(corner_save_name))
     plt.savefig(corner_save_name)
