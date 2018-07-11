@@ -470,5 +470,5 @@ if run_mcmc_now:
     corner.corner(res_df, **corner_kw)
     
     corner_save_name = save_header + 'mcmc_corner_plot.png'
-    print('Saving MCMC Corner Plot to '.format(corner_save_name))
+    print('Saving MCMC Corner Plot to {}'.format(corner_save_name))
     plt.savefig(corner_save_name)
