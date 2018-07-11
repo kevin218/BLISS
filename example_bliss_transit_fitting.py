@@ -3,6 +3,7 @@
 import argparse
 import batman
 import BLISS as bliss
+import corner
 import exoparams
 import json
 import matplotlib.pyplot as plt
@@ -11,6 +12,7 @@ import numpy as np
 from functools import partial
 from lmfit import Parameters, Minimizer, report_errors
 from os import environ
+from pandas import DataFrame
 from scipy import spatial 
 from sklearn.externals import joblib
 from statsmodels.robust import scale
@@ -330,7 +332,7 @@ if run_lmfit_now:
 
     print("LMFIT operation took {} seconds".format(time()-start))
 
-    if save_header is not '': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save'.format(save_header))
+    if save_header is not 'None': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save'.format(save_header))
     
     report_errors(fitResult.params)
 else:
@@ -356,7 +358,7 @@ good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.ma
 # plt.hist(bf_full_model,bins=bf_full_model.size//10)
 # plt.show()
 
-if plot_now or save_header is not '':
+if plot_now or save_header is not 'None':
     print('Plotting the Correlations')
     fig1 = plt.figure()
     ax11 = fig1.add_subplot(221)
@@ -465,6 +467,6 @@ if run_mcmc_now:
                         plot_density=False, fill_contours=True, color='darkblue')
     
     corner.corner(res_df, **corner_kw)
-    corner_save_name = 'corner'+dataDir[35:54]
+    corner_save_name = 'corner'+dataDir[35:54] + '.png'
     print('Saving MCMC Corner Plot to '.format(corner_save_name))
     plt.savefig(corner_save_name)
