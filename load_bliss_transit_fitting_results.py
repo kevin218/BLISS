@@ -100,60 +100,60 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
-                    xBinSize  = 0.1, yBinSize  = 0.1):
-    intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
-    slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
-    crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
-    
-    transit_model = transit_model_func(model_params, times[keep_inds])
-    
-    line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
-                           + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
-    
-    # setup non-systematics model (i.e. (star + planet) / star
-    model         = transit_model*line_model
-    
-    # compute the systematics model (i.e. BLISS)
-    sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
-                                    ycenters[keep_inds], 
-                                    fluxes[keep_inds], 
-                                    knots, nearIndices, 
-                                    xBinSize  = xBinSize, 
-                                    yBinSize  = yBinSize
-                                 )
-    
-    # Identify when something very weird happens, and the sensitivity_map fails
-    #   This may be related to the outlier points that use KNN instead of interpolation
-    #   We will mitigate these outliers by replacing them as the mean of their neighbours
-    #       or the closest neighbour, in the corner cases
-    nSig = 10
-    vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
-    
-    # Corner Cases that Cause Faults with Average Replacement
-    if len(sensitivity_map)-1 in vbad_sm:
-    	vbad_sm = np.array(list(set(vbad_sm) - set(len(sensitivity_map))))
-    	end_corner_case = True
-    else:
-    	end_corner_case = False
-    
-    if 0 in vbad_sm:
-    	vbad_sm = np.array(list(set(vbad_sm) - set([0])))
-    	start_corner_case = True
-    else:
-    	start_corner_case = False
-
-    # Default outlier mitigation
-    sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
-    
-    # Address outliers at the start and end of the array
-    #   This is equivalent to the "nearest neighbour" interpolation
-    if end_corner_case: sensitivity_map[-1] = sensitivity_map[2]
-    if start_corner_case: sensitivity_map[0] = sensitivity_map[1]
-    
-    model = model * sensitivity_map
-    
-    return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
+# def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds,
+#                     xBinSize  = 0.1, yBinSize  = 0.1):
+#     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
+#     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
+#     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
+#
+#     transit_model = transit_model_func(model_params, times[keep_inds])
+#
+#     line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
+#                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
+#
+#     # setup non-systematics model (i.e. (star + planet) / star
+#     model         = transit_model*line_model
+#
+#     # compute the systematics model (i.e. BLISS)
+#     sensitivity_map = bliss.BLISS(  xcenters[keep_inds],
+#                                     ycenters[keep_inds],
+#                                     fluxes[keep_inds],
+#                                     knots, nearIndices,
+#                                     xBinSize  = xBinSize,
+#                                     yBinSize  = yBinSize
+#                                  )
+#
+#     # Identify when something very weird happens, and the sensitivity_map fails
+#     #   This may be related to the outlier points that use KNN instead of interpolation
+#     #   We will mitigate these outliers by replacing them as the mean of their neighbours
+#     #       or the closest neighbour, in the corner cases
+#     nSig = 10
+#     vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
+#
+#     # Corner Cases that Cause Faults with Average Replacement
+#     if len(sensitivity_map)-1 in vbad_sm:
+#         vbad_sm = np.array(list(set(vbad_sm) - set(len(sensitivity_map))))
+#         end_corner_case = True
+#     else:
+#         end_corner_case = False
+#
+#     if 0 in vbad_sm:
+#         vbad_sm = np.array(list(set(vbad_sm) - set([0])))
+#         start_corner_case = True
+#     else:
+#         start_corner_case = False
+#
+#     # Default outlier mitigation
+#     sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
+#
+#     # Address outliers at the start and end of the array
+#     #   This is equivalent to the "nearest neighbour" interpolation
+#     if end_corner_case: sensitivity_map[-1] = sensitivity_map[2]
+#     if start_corner_case: sensitivity_map[0] = sensitivity_map[1]
+#
+#     model = model * sensitivity_map
+#
+#     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
 
 def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, 
                                 xBinSize  = 0.1, yBinSize  = 0.1):
@@ -187,7 +187,6 @@ def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, 
     output['bliss_map'] = sensitivity_map
     
     return output
-
 
 def exoparams_to_lmfit_params(planet_name):
     ep_params   = exoparams.PlanetParams(planet_name)
