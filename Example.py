@@ -28,33 +28,40 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         ySigmaRange (float): relative distance in gaussian sigma space to reject y-outliers
 
     Returns:
-        points (nDarray): X and Y positions for centering analysis
+        xcenters (nDarray): X positions for centering analysis
+        ycenters (nDarray): Y positions for centering analysis
         fluxes (nDarray): normalized photon counts from raw data
+        flux_err (nDarray): normalized photon uncertainties
         knots (nDarray): locations and initial flux values (weights) for interpolation grid
         nearIndices (nDarray): nearest neighbour indices per point for location of nearest knots
+        keep_inds (list): list of indicies to keep within the thresholds set
     
     """
     points, fluxes = BLISS.extractData(dataDir)
     
     points, fluxes = BLISS.removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     
-    knots = BLISS.createGrid(points, xBinSize, yBinSize)
-    knotTree = spatial.cKDTree(knots)
-    nearIndices = BLISS.nearestIndices(points, knotTree)
+    keep_inds = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
+    
+    knots = createGrid(xcenters[keep_inds], ycenters[keep_inds], xBinSize, yBinSize)
+    knotTree = spatial.KDTree(knots)
+    nearIndices = nearestIndices(xcenters[keep_inds], ycenters[keep_inds], knotTree)
     normFactor = (1/xBinSize) * (1/yBinSize)
     
-    return points, fluxes, knots, nearIndices
+    return times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds
 
 dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
 
-points, fluxes, knots, nearIndices = setup_BLISS_inputs_from_file(dataDir)
+times, xcenters, ycenters, fluxes, flux_err, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
 
-interpolFluxes = BLISS.BLISS(points, fluxes, knots, nearIndices, 
-                       xBinSize=xBinSize, yBinSize = yBinSize, 
-                       normFactor=normFactor)
-
+interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_inds], 
+                       knots, nearIndices, 
+                       xBinSize  = xBinSize, 
+                       yBinSize  = yBinSize, 
+                       normFactor= normFactor)
 y,x = 0,1
 
-plt.scatter([p[0] for p in points], [p[1] for p in points], s=0.1, c=interpolFluxes)
+plt.scatter(xcenters[keep_inds], ycenters[keep_inds], s=0.1, c=interpolFluxes)
+
 plt.colorbar()
 plt.show()
