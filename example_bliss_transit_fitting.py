@@ -190,6 +190,7 @@ def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, 
     
     return output
 
+
 def exoparams_to_lmfit_params(planet_name):
     ep_params   = exoparams.PlanetParams(planet_name)
     iApRs       = ep_params.ar.value

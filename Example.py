@@ -1,4 +1,4 @@
-import BLISS as BLISS
+import BLISS
 import matplotlib.pyplot as plt
 from scipy import spatial 
 
@@ -37,9 +37,9 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01, xSigmaRa
         keep_inds (list): list of indicies to keep within the thresholds set
     
     """
-    times, xcenter, ycenters, fluxes, flux_errs = extractData(dataDir)
+    points, fluxes = BLISS.extractData(dataDir)
     
-    points = np.array(list(zip(xcenter, ycenters)))
+    points, fluxes = BLISS.removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     
     keep_inds = removeOutliers(points, fluxes, xSigmaRange, ySigmaRange)
     
@@ -62,5 +62,6 @@ interpolFluxes = BLISS(xcenters[keep_inds], ycenters[keep_inds], fluxes[keep_ind
 y,x = 0,1
 
 plt.scatter(xcenters[keep_inds], ycenters[keep_inds], s=0.1, c=interpolFluxes)
+
 plt.colorbar()
 plt.show()
