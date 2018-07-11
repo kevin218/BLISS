@@ -3,6 +3,7 @@
 import argparse
 import batman
 import BLISS as bliss
+import corner
 import exoparams
 import json
 import matplotlib.pyplot as plt
@@ -11,6 +12,7 @@ import numpy as np
 from functools import partial
 from lmfit import Parameters, Minimizer, report_errors
 from os import environ
+from pandas import DataFrame
 from scipy import spatial 
 from sklearn.externals import joblib
 from statsmodels.robust import scale
