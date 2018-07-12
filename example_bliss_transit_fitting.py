@@ -126,18 +126,23 @@ def transit_model_func(model_params, times, init_t0, ldtype='quadratic', transit
 
 def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
                     xBinSize = 0.1, yBinSize = 0.1):
+    
+    zero = 0.0
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope = model_params['slope'] if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model_func(model_params, times[keep_inds], init_t0)
-    eclipse_model = transit_model_func(model_params, times[keep_inds], init_t0)
+    coeffs_line = [slope, crvtur]
     
-    line_model = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
-                           + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
+    # this line
+    line_model = intcpt
+    line_model += np.sum([c_now*(times-times.mean())**kc for kc,c_now in enumerate(coeffs_line) if c_now != zero])
+    
+    transit_model = transit_model_func(model_params, times[keep_inds], init_t0, transitType='primary')
+    eclipse_model = transit_model_func(model_params, times[keep_inds], init_t0, transitType='secondary')
     
     # setup non-systematics model (i.e. (star + planet) / star
-    model = transit_model*line_model
+    model = transit_model*line_model*eclipse_model
     
     # compute the systematics model (i.e. BLISS)
     sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
@@ -185,17 +190,23 @@ def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flu
 
 def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, init_t0,
                                 xBinSize = 0.1, yBinSize = 0.1):
+    
+    zero = 0.0
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
-    slope = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
+    slope = model_params['slope'] if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model_func(model_params, times[keep_inds], init_t0)
+    coeffs_line = [slope, crvtur]
     
-    line_model = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
-                           + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
+    # this line
+    line_model = intcpt
+    line_model += np.sum([c_now*(times-times.mean())**kc for kc,c_now in enumerate(coeffs_line) if c_now != zero])
+    
+    transit_model = transit_model_func(model_params, times[keep_inds], init_t0, transitType='primary')
+    eclipse_model = transit_model_func(model_params, times[keep_inds], init_t0, transitType='secondary')
     
     # setup non-systematics model (i.e. (star + planet) / star
-    model = transit_model*line_model
+    model = transit_model*line_model*eclipse_model
     
     # compute the systematics model (i.e. BLISS)
     sensitivity_map = bliss.BLISS(  xcenters[keep_inds], 
@@ -301,8 +312,8 @@ initialParams = Parameters()
 
 initialParams.add_many(
     ('period', init_period, False),
-    ('deltaTc', 0.0, True, -0.05, 0.05),
-    ('deltaEc', 0.0, True, -0.05, 0.05),
+    ('deltaTc', 1e-6, True, -0.05, 0.05),
+    ('deltaEc', 1e-6, True, -0.05, 0.05),
     ('inc', init_inc, False, 80.0, 90.),
     ('aprs', init_aprs, False, 0.0, 100.),
     ('tdepth', init_tdepth, True , 0.0, 0.3 ),
