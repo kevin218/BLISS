@@ -95,19 +95,20 @@ def transit_model_func(model_params, times, init_t0, ldtype='quadratic', transit
     u1 = model_params['u1'].value
     u2 = model_params['u2'].value
     
+    bm_params = batman.TransitParams() # object to store transit parameters
+    
     if 'edepth' in model_params.keys() and model_params['edepth'] > 0:
-        if 'ecc' in model_params.keys() and 'omega' in model_params.keys() and model_params['ecc'] > 0:
-            delta_phase = deltaphase_eclipse(model_params['ecc'], model_params['omega'])
-        else:
-            delta_phase = 0.5
+        # if 'ecc' in model_params.keys() and 'omega' in model_params.keys() and model_params['ecc'] > 0:
+        #     delta_phase = deltaphase_eclipse(model_params['ecc'], model_params['omega'])
+        # else:
+        #     delta_phase = 0.5
         
-        t_secondary = model_params['deltaTc'] + init_t0 + 0.5*model_params['period'] + model_params['deltaEc'] # model_params['period']*delta_phase
+        bm_params.t_secondary = model_params['deltaTc'] + init_t0 + 0.5*model_params['period'] + model_params['deltaEc']
+        # model_params['period']*delta_phase
     else:
         model_params.add('edepth', 0.0, False)
     
     rprs = np.sqrt(model_params['tdepth'].value)
-    
-    bm_params = batman.TransitParams() # object to store transit parameters
     
     bm_params.per = model_params['period'].value   # orbital period
     bm_params.t0 = model_params['deltaTc'].value + init_t0  # time of inferior conjunction
@@ -172,7 +173,7 @@ def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flu
     	start_corner_case = True
     else:
     	start_corner_case = False
-
+    
     # Default outlier mitigation
     sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
     
