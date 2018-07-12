@@ -483,7 +483,7 @@ if run_mcmc_now:
     res_df = DataFrame(res_flatchain, columns=res_var_names)
     # res_df = res_df.drop(['u2','slope'], axis=1)
     
-    print(res_df)
+    print(res_df.mean(), res_df.std())
     
     corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, 
                         smooth=True, smooth1d=True, bins=100, 
