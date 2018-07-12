@@ -309,8 +309,6 @@ if len(str(int(init_t0))) > len(str(int(times.mean()))): init_t0 = init_t0 - 500
 print('Initializing Parameters')
 initialParams = Parameters()
 
-# fluxes_std = np.std(fluxes/np.median(fluxes))
-
 initialParams.add_many(
     ('period', init_period, False),
     ('deltaTc', 0.0, True, -0.05, 0.05),
@@ -320,7 +318,7 @@ initialParams.add_many(
     ('tdepth', init_tdepth, True , 0.0, 0.3 ),
     ('edepth', init_fpfs, True, 0.0, 0.05),
     ('ecc', init_ecc, False, 0.0, 1.0 ),
-    ('omega', init_omega , False, 0.0, 1.0 ),
+    ('omega', init_omega , False, 0.0, 360.0 ),
     ('u1' , init_u1, True , 0.0, 1.0 ),
     ('u2' , init_u2, True, 0.0, 1.0 ),
     ('intcpt', 1.0, True ),#, 1.0-1e-3 + 1.0+1e-3),
