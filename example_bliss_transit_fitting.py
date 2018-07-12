@@ -1,6 +1,29 @@
 # EXAMPLE USAGE: python example_bliss_transit_fitting.py -f ../../data/group0_gsc.joblib.save -p 'GJ 1214 b'
 
 import argparse
+ap = argparse.ArgumentParser()
+ap.add_argument('-f', '--filename', type=str, required=True , default='', help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-pn', '--planet_name', type=str, required=True , default='', help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+ap.add_argument('-xb', '--xbinsize', type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
+ap.add_argument('-yb', '--ybinsize', type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
+ap.add_argument('-pl', '--plot2screen', type=bool , required=False, default=False, help='Toggle whether to Plot to Screen or Not')
+ap.add_argument('-sh', '--save_header', type=str, required=False, default='rename_me_', help='Save name header to save LMFIT joblibe and plots to; set to `None` to dis saving')
+ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
+ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
+
+args = vars(ap.parse_args())
+
+# dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
+dataDir = args['filename']
+xBinSize = args['xbinsize']
+yBinSize = args['ybinsize']
+planet_name = args['planet_name']
+plot_now = args['plot2screen']
+save_header = args['save_header']
+run_mcmc_now = args['run_mcmc_now']
+run_lmfit_now = args['run_lmfit_now']
+
+
 import batman
 import BLISS as bliss
 import corner
@@ -67,7 +90,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
 def deltaphase_eclipse(ecc, omega):
     return 0.5*( 1 + (4. / pi) * ecc * cos(omega))
 
-def transit_model_func(model_params, times, ldtype='quadratic', transitType='primary'):
+def transit_model_func(model_params, times, init_t0, ldtype='quadratic', transitType='primary'):
     # Transit Parameters
     u1 = model_params['u1'].value
     u2 = model_params['u2'].value
@@ -78,8 +101,7 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
         else:
             delta_phase = 0.5
         
-        t_secondary = model_params['tCenter'] + model_params['period']*delta_phase
-        
+        t_secondary = model_params['deltaTc'] + init_t0 + 0.5*model_params['period'] + model_params['deltaEc'] # model_params['period']*delta_phase
     else:
         model_params.add('edepth', 0.0, False)
     
@@ -88,7 +110,7 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     bm_params = batman.TransitParams() # object to store transit parameters
     
     bm_params.per = model_params['period'].value   # orbital period
-    bm_params.t0 = model_params['tCenter'].value  # time of inferior conjunction
+    bm_params.t0 = model_params['deltaTc'].value + init_t0  # time of inferior conjunction
     bm_params.inc = model_params['inc'].value      # inclunaition in degrees
     bm_params.a = model_params['aprs'].value     # semi-major axis (in units of stellar radii)
     bm_params.rp = rprs     # planet radius (in units of stellar radii)
@@ -102,13 +124,14 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
+def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
                     xBinSize = 0.1, yBinSize = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
-    slope = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
+    slope = model_params['slope'] if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model_func(model_params, times[keep_inds])
+    transit_model = transit_model_func(model_params, times[keep_inds], init_t0)
+    eclipse_model = transit_model_func(model_params, times[keep_inds], init_t0)
     
     line_model = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
@@ -155,15 +178,18 @@ def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, k
     
     model = model * sensitivity_map
     
+    if abs(model_params['deltaTc']) > 0.1: print(model_params['deltaTc'], model_params['deltaTc'].min, model_params['deltaTc'].max)
+    if abs(model_params['deltaEc']) > 0.1: print(model_params['deltaEc'], model_params['deltaEc'].min, model_params['deltaEc'].max)
+    
     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
 
-def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, 
+def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, init_t0,
                                 xBinSize = 0.1, yBinSize = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
     slope = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
     
-    transit_model = transit_model_func(model_params, times[keep_inds])
+    transit_model = transit_model_func(model_params, times[keep_inds], init_t0)
     
     line_model = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
@@ -203,27 +229,6 @@ def exoparams_to_lmfit_params(planet_name):
     
     return iPeriod, iTCenter, iApRs, iInc, iTdepth, iEcc, iOmega
 
-ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename', type=str, required=True , default='', help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-pn', '--planet_name', type=str, required=True , default='', help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-ap.add_argument('-xb', '--xbinsize', type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
-ap.add_argument('-yb', '--ybinsize', type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
-ap.add_argument('-pl', '--plot2screen', type=bool , required=False, default=False, help='Toggle whether to Plot to Screen or Not')
-ap.add_argument('-sh', '--save_header', type=str, required=False, default='rename_me_', help='Save name header to save LMFIT joblibe and plots to; set to `None` to dis saving')
-ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
-ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
-
-args = vars(ap.parse_args())
-
-# dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
-dataDir = args['filename']
-xBinSize = args['xbinsize']
-yBinSize = args['ybinsize']
-planet_name = args['planet_name']
-plot_now = args['plot2screen']
-save_header = args['save_header']
-run_mcmc_now = args['run_mcmc_now']
-run_lmfit_now = args['run_lmfit_now']
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -296,11 +301,12 @@ initialParams = Parameters()
 
 initialParams.add_many(
     ('period', init_period, False),
-    ('tCenter', init_t0, True, init_t0 - 0.1, init_t0 + 0.1),
+    ('deltaTc', 0.0, True, -0.05, 0.05),
+    ('deltaEc', 0.0, True, -0.05, 0.05),
     ('inc', init_inc, False, 80.0, 90.),
     ('aprs', init_aprs, False, 0.0, 100.),
     ('tdepth', init_tdepth, True , 0.0, 0.3 ),
-    ('edepth', init_fpfs, False, 0.0, 0.05),
+    ('edepth', init_fpfs, True, 0.0, 0.05),
     ('ecc', init_ecc, False, 0.0, 1.0 ),
     ('omega', init_omega , False, 0.0, 1.0 ),
     ('u1' , init_u1, True , 0.0, 1.0 ),
@@ -319,7 +325,8 @@ partial_residuals = partial(residuals_func,
                              flux_errs = flux_errs / np.median(fluxes),
                              knots = knots,
                              nearIndices = nearIndices,
-                             keep_inds = keep_inds
+                             keep_inds = keep_inds,
+                             init_t0 = init_t0
                              )
 
 if run_lmfit_now:
@@ -342,7 +349,7 @@ else:
 print('Establishing the Best Fit Solution')
 bf_model_set = generate_best_fit_solution(fitResult.params, 
                                             times, xcenters, ycenters, fluxes / np.median(fluxes), 
-                                            knots, nearIndices, keep_inds, 
+                                            knots, nearIndices, keep_inds, init_t0,
                                             xBinSize = xBinSize, yBinSize = yBinSize)
 
 bf_full_model = bf_model_set['full_model']
@@ -422,18 +429,34 @@ if plot_now or save_header is not 'None':
 if run_mcmc_now:
     print("MCMC Sampling the Posterior Space")
     
-    mle0.params.add('f', value=1, min=0.001, max=2)
+    mle0.params.add('unc_rescale', value=1, min=0.001, max=2)
     
-    def logprior_func(p):
-        return 0
+    def logprior_func(p):#, init_params):
+        ''' Uniform Log-Prior: if p is within set bounds for init_params, then keep
+        '''
+        
+        for key in p.keys():
+            if p[key].vary:
+                if p[key].min > p[key] > p[key].max:
+                    return -np.inf
+            elif p[key].value is not p[key].value:
+                raise ValueError('The fixed parameters should be fixed.')
+        
+        return 0 # uniform log-prior
+    
+    # partial_logprior = partial(logprior_func, init_params = initialParams)
     
     def lnprob(p):
+        ''' Log Posterior for MCMC sampling with Bayesian Statistics
+        '''
+        
         logprior = logprior_func(p)
+        
         if not np.isfinite(logprior):
             return -np.inf
         
         resid = partial_residuals(p)
-        s = p['f']
+        s = p['unc_rescale']
         resid *= 1 / s
         resid *= resid
         resid += np.log(2 * np.pi * s**2)
@@ -445,20 +468,21 @@ if run_mcmc_now:
     
     #import emcee
     #res = emcee.sampler(lnlikelihood = lnprob, lnprior=logprior_func)
-
+    
     res = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                         pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
-                        is_weighted=True, seed=None)
+                        is_weighted=True, seed=None, progress=True)
     
     print("MCMC operation took {} seconds".format(time()-start))
-    emcee_save_name = save_header + 'emcee_sample_results.joblib.save'
+    emcee_save_name = save_header + '_emcee_sample_results.joblib.save'
     print("Saving EMCEE results to {}".format(emcee_save_name))
     joblib.dump(res,emcee_save_name)
     
     res_var_names = np.array(res.var_names)
     res_flatchain = np.array(res.flatchain)
     res_df = DataFrame(res_flatchain, columns=res_var_names)
-    res_df = res_df.drop(['u2','slope'], axis=1)
+    # res_df = res_df.drop(['u2','slope'], axis=1)
+    
     print(res_df)
     
     corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, 
@@ -469,6 +493,6 @@ if run_mcmc_now:
     
     corner.corner(res_df, **corner_kw)
     
-    corner_save_name = save_header + 'mcmc_corner_plot.png'
+    corner_save_name = save_header + '_mcmc_corner_plot.png'
     print('Saving MCMC Corner Plot to {}'.format(corner_save_name))
     plt.savefig(corner_save_name)
