@@ -281,7 +281,7 @@ if planet_name[-5:] == '.json':
 else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
 
-init_fpfs = 500 / ppm if init_fpfs is None else init_fpfs
+init_fpfs = 100 / ppm if init_fpfs is None else init_fpfs
 init_u1 = 0.1 if init_u1 is None else init_u1
 init_u2 = 0.0 if init_u2 is None else init_u2
 init_u3 = 0.0 if init_u3 is None else init_u3
@@ -321,7 +321,7 @@ initialParams.add_many(
     ('omega', init_omega , False, 0.0, 360.0 ),
     ('u1' , init_u1, True , 0.0, 1.0 ),
     ('u2' , init_u2, True, 0.0, 1.0 ),
-    ('intcpt', 1.0, True ),#, 1.0-1e-3 + 1.0+1e-3),
+    ('intcpt', 1.0, True, 0.0, np.inf ), # SHOULD THIS BE POSITIVE?), #
     ('slope', 0.0, True ),
     ('crvtur', 0.0, False))
 
