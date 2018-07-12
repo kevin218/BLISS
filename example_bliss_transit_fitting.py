@@ -2,8 +2,8 @@
 
 import argparse
 ap = argparse.ArgumentParser()
-ap.add_argument('-f', '--filename', type=str, required=True , default='', help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
-ap.add_argument('-pn', '--planet_name', type=str, required=True , default='', help='Either the string name of the planet from Exoplanets.org or a json file containing ')
+ap.add_argument('-f', '--filename', type=str, required=True , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
+ap.add_argument('-pn', '--planet_name', type=str, required=True, help='Either the string name of the planet from Exoplanets.org or a json file containing ')
 ap.add_argument('-xb', '--xbinsize', type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
 ap.add_argument('-yb', '--ybinsize', type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
 ap.add_argument('-pl', '--plot2screen', type=bool , required=False, default=False, help='Toggle whether to Plot to Screen or Not')
