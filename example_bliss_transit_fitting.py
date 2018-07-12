@@ -135,7 +135,7 @@ def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flu
     
     coeffs_line = [slope, crvtur]
     
-    # this line
+    # this line expands the use of linear model to any degree solutions
     line_model = intcpt
     line_model += np.sum([c_now*(times-times.mean())**kc for kc,c_now in enumerate(coeffs_line) if c_now != zero])
     
@@ -313,8 +313,8 @@ initialParams = Parameters()
 
 initialParams.add_many(
     ('period', init_period, False),
-    ('deltaTc', 1e-6, True, -0.05, 0.05),
-    ('deltaEc', 1e-6, True, -0.05, 0.05),
+    ('deltaTc', 0.0, True, -0.05, 0.05),
+    ('deltaEc', 0.0, True, -0.05, 0.05),
     ('inc', init_inc, False, 80.0, 90.),
     ('aprs', init_aprs, False, 0.0, 100.),
     ('tdepth', init_tdepth, True , 0.0, 0.3 ),
