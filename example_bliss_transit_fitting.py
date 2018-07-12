@@ -471,7 +471,7 @@ if run_mcmc_now:
     
     res = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
                         pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
-                        is_weighted=True, seed=None, progress=True)
+                        is_weighted=True, seed=None)
     
     print("MCMC operation took {} seconds".format(time()-start))
     emcee_save_name = save_header + '_emcee_sample_results.joblib.save'
