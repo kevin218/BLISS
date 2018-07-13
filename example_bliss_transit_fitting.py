@@ -90,7 +90,7 @@ def setup_BLISS_inputs_from_file(dataDir, xBinSize=0.01, yBinSize=0.01,
 def deltaphase_eclipse(ecc, omega):
     return 0.5*( 1 + (4. / pi) * ecc * cos(omega))
 
-def transit_model_func(model_params, times, init_t0, ldtype='quadratic', transitType='primary'):
+def transit_model_func(model_params, times, init_t0=0.0, ldtype='quadratic', transitType='primary'):
     # Transit Parameters
     u1 = model_params['u1'].value
     u2 = model_params['u2'].value
@@ -125,7 +125,7 @@ def transit_model_func(model_params, times, init_t0, ldtype='quadratic', transit
     
     return m_eclipse.light_curve(bm_params)
 
-def residuals_func(model_params, init_t0, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, 
+def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds, init_t0, 
                     xBinSize = 0.1, yBinSize = 0.1):
     
     zero = 0.0
@@ -247,6 +247,7 @@ init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 if planet_name[-5:] == '.json':
     with open(planet_name, 'r') as file_in:
         planet_json = json.load(file_in)
+    
     init_period = planet_json['period']
     init_t0 = planet_json['t0']
     init_aprs = planet_json['aprs']
@@ -259,10 +260,10 @@ if planet_name[-5:] == '.json':
     elif 'rp' in planet_json.keys():
         init_tdepth = planet_json['rp']**2
     else:
-        raise ValueError("Eitehr `tdepth` or `rprs` or `rp` (in relative units) \
+        raise ValueError("Either `tdepth` or `rprs` or `rp` (in relative units) \
                             must be included in {}".format(planet_name))
     
-    init_fpfs = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
+    init_fpfs = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 200 / ppm
     init_ecc = planet_json['ecc']
     init_omega = planet_json['omega']
     init_u1 = planet_json['u1'] if 'u1' in planet_json.keys() else None
@@ -306,6 +307,9 @@ if len_init_t0 == 7 and len_times != 7:
 # Check if `init_t0` is in MJD or Simplified-MJD
 if len(str(int(init_t0))) > len(str(int(times.mean()))): init_t0 = init_t0 - 50000
 
+# slide the initial tCenter to the middle of the first transit
+while init_t0 < times.min(): init_t0 += init_period
+
 print('Initializing Parameters')
 initialParams = Parameters()
 
@@ -316,12 +320,12 @@ initialParams.add_many(
     ('inc', init_inc, False, 80.0, 90.),
     ('aprs', init_aprs, False, 0.0, 100.),
     ('tdepth', init_tdepth, True , 0.0, 0.3 ),
-    ('edepth', init_fpfs, True, 0.0, 0.05),
+    ('edepth', init_fpfs, True, 0.0, 300/ppm),
     ('ecc', init_ecc, False, 0.0, 1.0 ),
     ('omega', init_omega , False, 0.0, 360.0 ),
     ('u1' , init_u1, True , 0.0, 1.0 ),
-    ('u2' , init_u2, True, 0.0, 1.0 ),
-    ('intcpt', 1.0, True, 0.0, np.inf ), # SHOULD THIS BE POSITIVE?), #
+    ('u2' , init_u2, False, 0.0, 1.0 ),
+    ('intcpt', 1.0, True), #, 0.0, np.inf ), # SHOULD THIS BE POSITIVE?
     ('slope', 0.0, True ),
     ('crvtur', 0.0, False))
 
@@ -479,7 +483,7 @@ if run_mcmc_now:
     #import emcee
     #res = emcee.sampler(lnlikelihood = lnprob, lnprior=logprior_func)
     
-    res = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
+    res = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=100, thin=10, ntemps=1,
                         pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
                         is_weighted=True, seed=None)
     
@@ -495,13 +499,25 @@ if run_mcmc_now:
     
     print(res_df.mean(), res_df.std())
     
+    ppm = 1e6
+    deltaTc_rng = -0.005,0.005
+    deltaEc_rng = -0.005,0.005
+    tdepth_rng = 0.01357,0.01385
+    edepth_rng = 0.0,1000/ppm
+    u1_rng = 0.1097,0.11035
+    u2_rng = 0.1097,0.11035
+    intcpt_rng = 0.996,1.002
+    slope_rng = -1e-3, 1e-3
+    f_rng = 0.998,1.003
+    
+    ranges = deltaTc_rng, deltaEc_rng, tdepth_rng, edepth_rng, u1_rng, u2_rng, intcpt_rng, slope_rng, f_rng
+                
+    n_corners = 4 # only plot ['deltaTc', 'deltaEc', 'tdepth', 'edepth']
     corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, 
                         smooth=True, smooth1d=True, bins=100, 
-                        range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),\
-                                    (0.996,1.002), (0.998,1.003)], 
-                        plot_density=False, fill_contours=True, color='darkblue')
+                        range=ranges[:n_corners], plot_density=False, fill_contours=True, color='darkblue')
     
-    corner.corner(res_df, **corner_kw)
+    corner.corner(res_df[res_df.columns[:n_corners]], **corner_kw)
     
     corner_save_name = save_header + '_mcmc_corner_plot.png'
     print('Saving MCMC Corner Plot to {}'.format(corner_save_name))
