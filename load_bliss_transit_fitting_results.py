@@ -100,61 +100,6 @@ def transit_model_func(model_params, times, ldtype='quadratic', transitType='pri
     
     return m_eclipse.light_curve(bm_params)
 
-# def residuals_func(model_params, times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds,
-#                     xBinSize  = 0.1, yBinSize  = 0.1):
-#     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
-#     slope  = model_params['slope']  if 'slope'  in model_params.keys() else 0.0 # default
-#     crvtur = model_params['crvtur'] if 'crvtur' in model_params.keys() else 0.0 # default
-#
-#     transit_model = transit_model_func(model_params, times[keep_inds])
-#
-#     line_model    = intcpt + slope*(times[keep_inds]-times[keep_inds].mean()) \
-#                            + crvtur*(times[keep_inds]-times[keep_inds].mean())**2.
-#
-#     # setup non-systematics model (i.e. (star + planet) / star
-#     model         = transit_model*line_model
-#
-#     # compute the systematics model (i.e. BLISS)
-#     sensitivity_map = bliss.BLISS(  xcenters[keep_inds],
-#                                     ycenters[keep_inds],
-#                                     fluxes[keep_inds],
-#                                     knots, nearIndices,
-#                                     xBinSize  = xBinSize,
-#                                     yBinSize  = yBinSize
-#                                  )
-#
-#     # Identify when something very weird happens, and the sensitivity_map fails
-#     #   This may be related to the outlier points that use KNN instead of interpolation
-#     #   We will mitigate these outliers by replacing them as the mean of their neighbours
-#     #       or the closest neighbour, in the corner cases
-#     nSig = 10
-#     vbad_sm = np.where(abs(sensitivity_map - np.median(sensitivity_map)) > nSig*scale.mad(sensitivity_map))[0]
-#
-#     # Corner Cases that Cause Faults with Average Replacement
-#     if len(sensitivity_map)-1 in vbad_sm:
-#         vbad_sm = np.array(list(set(vbad_sm) - set(len(sensitivity_map))))
-#         end_corner_case = True
-#     else:
-#         end_corner_case = False
-#
-#     if 0 in vbad_sm:
-#         vbad_sm = np.array(list(set(vbad_sm) - set([0])))
-#         start_corner_case = True
-#     else:
-#         start_corner_case = False
-#
-#     # Default outlier mitigation
-#     sensitivity_map[vbad_sm] = 0.5*(sensitivity_map[vbad_sm-1] + sensitivity_map[vbad_sm+1])
-#
-#     # Address outliers at the start and end of the array
-#     #   This is equivalent to the "nearest neighbour" interpolation
-#     if end_corner_case: sensitivity_map[-1] = sensitivity_map[2]
-#     if start_corner_case: sensitivity_map[0] = sensitivity_map[1]
-#
-#     model = model * sensitivity_map
-#
-#     return (model - fluxes[keep_inds]) / flux_errs[keep_inds] # should this be squared?
-
 def generate_best_fit_solution(model_params, times, xcenters, ycenters, fluxes, knots, nearIndices, keep_inds, 
                                 xBinSize  = 0.1, yBinSize  = 0.1):
     intcpt = model_params['intcpt'] if 'intcpt' in model_params.keys() else 1.0 # default
@@ -203,24 +148,21 @@ def exoparams_to_lmfit_params(planet_name):
 ap = argparse.ArgumentParser()
 ap.add_argument('-f', '--filename'      , type=str  , required=True , default=''  , help='File storing the times, xcenters, ycenters, fluxes, flux_errs')
 ap.add_argument('-pn', '--planet_name'  , type=str  , required=True , default=''  , help='Either the string name of the planet from Exoplanets.org or a json file containing ')
-ap.add_argument('-xb', '--xbinsize'     , type=float, required=False, default=0.1 , help='Stepsize in X-sigma to space the knots')
-ap.add_argument('-yb', '--ybinsize'     , type=float, required=False, default=0.1 , help='Stepsize in Y-sigma to space the knots')
 ap.add_argument('-pl', '--plot2screen'  , type=bool , required=False, default=False, help='Toggle whether to Plot to Screen or Not')
+ap.add_argument('-sn', '--save_now'  , type=bool , required=False, default=False, help='Toggle whether to Save Plots to File')
 ap.add_argument('-sh', '--save_header'  , type=str  , required=False, default='rename_me_', help='Save name header to save LMFIT joblibe and plots to; set to `None` to dis saving')
-ap.add_argument('-rm', '--run_mcmc_now' , type=bool , required=False, default=True, help='Toggle whether to Run LMFIT Now or just use the init values')
-ap.add_argument('-rl', '--run_lmfit_now', type=bool , required=False, default=True, help='Toggle whether to Run the MCMC Now or just LMFIT/Init')
-
+ap.add_argument('-nc', '--n_corners'  , type=int, required=False, default=None, help='Only plot the first `n_corners` dimensions in MCMC corner plot')
+ap.add_argument('-ns', '--n_sig'  , type=int, required=False, default=3, help='Set the range to n_sig sigma widths')
 args = vars(ap.parse_args())
 
 # dataDir = environ['HOME'] + "/Research/PlanetName/data/centers_and_flux_data.joblib.save"
-dataDir       = args['filename']
-xBinSize      = args['xbinsize']
-yBinSize      = args['ybinsize']
-planet_name   = args['planet_name']
-plot_now      = args['plot2screen']
-save_header   = args['save_header']
-run_mcmc_now  = args['run_mcmc_now']
-run_lmfit_now = args['run_lmfit_now']
+dataDir = args['filename']
+planet_name = args['planet_name']
+plot_now = args['plot2screen']
+save_header = args['save_header']
+save_now = args['save_now']
+n_corners = args['n_corners']
+n_sig = args['n_sig']
 
 init_u1, init_u2, init_u3, init_u4, init_fpfs = None, None, None, None, None
 
@@ -228,27 +170,27 @@ if planet_name[-5:] == '.json':
     with open(planet_name, 'r') as file_in:
         planet_json = json.load(file_in)
     init_period = planet_json['period']
-    init_t0     = planet_json['t0']
-    init_aprs   = planet_json['aprs']
-    init_inc    = planet_json['inc']
+    init_t0 = planet_json['t0']
+    init_aprs = planet_json['aprs']
+    init_inc = planet_json['inc']
     
     if 'tdepth' in planet_json.keys():
-        init_tdepth   = planet_json['tdepth']
+        init_tdepth = planet_json['tdepth']
     elif 'rprs' in planet_json.keys():
-        init_tdepth   = planet_json['rprs']**2
+        init_tdepth = planet_json['rprs']**2
     elif 'rp' in planet_json.keys():
-        init_tdepth   = planet_json['rp']**2
+        init_tdepth = planet_json['rp']**2
     else:
         raise ValueError("Eitehr `tdepth` or `rprs` or `rp` (in relative units) \
                             must be included in {}".format(planet_name))
     
-    init_fpfs   = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
-    init_ecc    = planet_json['ecc']
-    init_omega  = planet_json['omega']
-    init_u1     = planet_json['u1'] if 'u1' in planet_json.keys() else None
-    init_u2     = planet_json['u2'] if 'u2' in planet_json.keys() else None
-    init_u3     = planet_json['u3'] if 'u3' in planet_json.keys() else None
-    init_u4     = planet_json['u4'] if 'u4' in planet_json.keys() else None
+    init_fpfs = planet_json['fpfs'] if 'fpfs' in planet_json.keys() else 500 / ppm
+    init_ecc = planet_json['ecc']
+    init_omega = planet_json['omega']
+    init_u1 = planet_json['u1'] if 'u1' in planet_json.keys() else None
+    init_u2 = planet_json['u2'] if 'u2' in planet_json.keys() else None
+    init_u3 = planet_json['u3'] if 'u3' in planet_json.keys() else None
+    init_u4 = planet_json['u4'] if 'u4' in planet_json.keys() else None
     
     if 'planet name' in planet_json.keys():
         planet_name = planet_json['planet name']
@@ -262,10 +204,10 @@ else:
     init_period, init_t0, init_aprs, init_inc, init_tdepth, init_ecc, init_omega = exoparams_to_lmfit_params(planet_name)
 
 init_fpfs = 500 / ppm if init_fpfs is None else init_fpfs
-init_u1   = 0.1 if init_u1 is None else init_u1
-init_u2   = 0.0 if init_u2 is None else init_u2
-init_u3   = 0.0 if init_u3 is None else init_u3
-init_u4   = 0.0 if init_u4 is None else init_u4
+init_u1 = 0.1 if init_u1 is None else init_u1
+init_u2 = 0.0 if init_u2 is None else init_u2
+init_u3 = 0.0 if init_u3 is None else init_u3
+init_u4 = 0.0 if init_u4 is None else init_u4
 
 print('Acquiring Data')
 times, xcenters, ycenters, fluxes, flux_errs, knots, nearIndices, keep_inds = setup_BLISS_inputs_from_file(dataDir)
@@ -286,77 +228,27 @@ if len_init_t0 == 7 and len_times != 7:
 # Check if `init_t0` is in MJD or Simplified-MJD
 if len(str(int(init_t0))) > len(str(int(times.mean()))): init_t0 = init_t0 - 50000
 
-print('Initializing Parameters')
-initialParams = Parameters()
 
-# fluxes_std = np.std(fluxes/np.median(fluxes))
-
-initialParams.add_many(
-    ('period'   , init_period, False),
-    ('tCenter'  , init_t0    , True  , init_t0 - 0.1, init_t0 + 0.1),
-    ('inc'      , init_inc   , False, 80.0, 90.),
-    ('aprs'     , init_aprs  , False, 0.0, 100.),
-    ('tdepth'   , init_tdepth, True , 0.0, 0.3 ),
-    ('edepth'   , init_fpfs  , False, 0.0, 0.05),
-    ('ecc'      , init_ecc   , False, 0.0, 1.0 ),
-    ('omega'    , init_omega , False, 0.0, 1.0 ),
-    ('u1'       , init_u1    , True , 0.0, 1.0 ),
-    ('u2'       , init_u2    , True, 0.0, 1.0 ),
-    ('intcpt'   , 1.0        , True ),#, 1.0-1e-3 + 1.0+1e-3),
-    ('slope'    , 0.0        , True ),
-    ('crvtur'   , 0.0        , False))
-
-# Reduce the number of inputs in the objective function sent to LMFIT
-#   by setting the static vectors as static in the wrapper function
-partial_residuals  = partial(residuals_func, 
-                             times       = times,
-                             xcenters    = xcenters, 
-                             ycenters    = ycenters, 
-                             fluxes      = fluxes / np.median(fluxes), 
-                             flux_errs   = flux_errs / np.median(fluxes),
-                             knots       = knots,
-                             nearIndices = nearIndices,
-                             keep_inds   = keep_inds
-                             )
-
-if run_lmfit_now:
-    print('LM-Fitting the Model')
-    # Setup up the call to minimize the residuals (i.e. ChiSq)
-    mle0  = Minimizer(partial_residuals, initialParams)
-
-    start = time()
-
-    fitResult = mle0.leastsq() # Go-Go Gadget Fitting Routine
-
-    print("LMFIT operation took {} seconds".format(time()-start))
-
-    if save_header is not 'None': joblib.dump(fitResult, '{}_LMFIT_fitResults.joblib.save'.format(save_header))
-    
+lmfit_save_name = '{}_LMFIT_fitResults.joblib.save'.format(save_header)
+if os.path.exists('{}_LMFIT_fitResults.joblib.save'.format(save_header))
+    fitResult = joblib.load(lmfit_save_name)
     report_errors(fitResult.params)
-else:
-    fitResult.params = initialParams
 
-print('Establishing the Best Fit Solution')
-bf_model_set = generate_best_fit_solution(fitResult.params, 
-                                            times, xcenters, ycenters, fluxes / np.median(fluxes), 
-                                            knots, nearIndices, keep_inds, 
-                                            xBinSize  = xBinSize, yBinSize  = yBinSize)
+if plot_now:
+    print('Establishing the Best Fit Solution')
+    bf_model_set = generate_best_fit_solution(fitResult.params, 
+                                                times, xcenters, ycenters, fluxes / np.median(fluxes), 
+                                                knots, nearIndices, keep_inds, 
+                                                xBinSize = xBinSize, yBinSize = yBinSize)
 
-bf_full_model    = bf_model_set['full_model']
-bf_line_model    = bf_model_set['line_model']
-bf_transit_model = bf_model_set['transit_model']
-bf_bliss_map     = bf_model_set['bliss_map']
-
-nSig = 10
-good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
-
-# print('FINDME:', (fluxes[keep_inds]).mean(),
-#         bf_full_model.mean(), bf_line_model.mean(), bf_transit_model.mean(), bf_bliss_map.mean())
-
-# plt.hist(bf_full_model,bins=bf_full_model.size//10)
-# plt.show()
-
-if plot_now or save_header is not 'None':
+    bf_full_model = bf_model_set['full_model']
+    bf_line_model = bf_model_set['line_model']
+    bf_transit_model = bf_model_set['transit_model']
+    bf_bliss_map = bf_model_set['bliss_map']
+    
+    nSig = 10
+    good_bf = np.where(abs(bf_full_model - np.median(bf_full_model)) < nSig*scale.mad(bf_full_model))[0]
+    
     print('Plotting the Correlations')
     fig1 = plt.figure()
     ax11 = fig1.add_subplot(221)
@@ -410,62 +302,37 @@ if plot_now or save_header is not 'None':
     mng.window.showMaximized()
     # plt.tight_layout()
     
-    if plot_now: plt.show()
+    plt.show()
     
-    if save_header is not 'None': 
+    if save_now: 
         fig1.savefig('{}_fig1_BLISS_Correlations_Plots_with_LMFIT.png'.format(save_header))
         fig2.savefig('{}_fig2_BLISS_Time_Series_Fits_and_Residuals_with_LMFIT.png'.format(save_header))
 
-if run_mcmc_now:
-    print("MCMC Sampling the Posterior Space")
-    
-    mle0.params.add('f', value=1, min=0.001, max=2)
-    
-    def logprior_func(p):
-        return 0
-    
-    def lnprob(p):
-        logprior = logprior_func(p)
-        if not np.isfinite(logprior):
-            return -np.inf
-        
-        resid = partial_residuals(p)
-        s = p['f']
-        resid *= 1 / s
-        resid *= resid
-        resid += np.log(2 * np.pi * s**2)
-        return -0.5 * np.sum(resid) + logprior
-    
-    mini  = Minimizer(lnprob, mle0.params)
-    
-    start = time()
-    
-    #import emcee
-    #res = emcee.sampler(lnlikelihood = lnprob, lnprior=logprior_func)
-
-    res   = mini.emcee(params=mle0.params, steps=100, nwalkers=100, burn=1, thin=10, ntemps=1,
-                        pos=None, reuse_sampler=False, workers=1, float_behavior='posterior',
-                        is_weighted=True, seed=None)
-    
-    print("MCMC operation took {} seconds".format(time()-start))
-    emcee_save_name = save_header + 'emcee_sample_results.joblib.save'
-    print("Saving EMCEE results to {}".format(emcee_save_name))
-    joblib.dump(res,emcee_save_name)
+print("Loading EMCEE results to {}".format(emcee_save_name))
+emcee_save_name = save_header + 'emcee_sample_results.joblib.save'
+if os.path.exists(emcee_save_name):
+    res = joblib.load(emcee_save_name)
     
     res_var_names = np.array(res.var_names)
     res_flatchain = np.array(res.flatchain)
+    
     res_df = DataFrame(res_flatchain, columns=res_var_names)
     res_df = res_df.drop(['u2','slope'], axis=1)
-    print(res_df)
+
+if plot_now:
+    ranges = [(val.mean() - n_sig*val.std()) for key, val in res_df.items()]
     
-    corner_kw = dict(levels=[0.68, 0.95, 0.997], plot_datapoints=False, 
+    levels = [0.68, 0.95, 0.997]
+    
+    # [(54945,54990),(0.01357,0.01385),(0.1097,0.11035), (0.996,1.002), (0.998,1.003)]
+    corner_kw = dict(levels=levels, plot_datapoints=False, 
                         smooth=True, smooth1d=True, bins=100, 
-                        range=[(54945,54990),(0.01357,0.01385),(0.1097,0.11035),\
-                                    (0.996,1.002), (0.998,1.003)], 
-                        plot_density=False, fill_contours=True, color='darkblue')
+                        range=ranges, plot_density=False, 
+                        fill_contours=True, color='darkblue')
     
     corner.corner(res_df, **corner_kw)
     
     corner_save_name = save_header + 'mcmc_corner_plot.png'
-    print('Saving MCMC Corner Plot to {}'.format(corner_save_name))
-    plt.savefig(corner_save_name)
+    if save_now:
+        print('Saving MCMC Corner Plot to {}'.format(corner_save_name))
+        plt.savefig(corner_save_name)
